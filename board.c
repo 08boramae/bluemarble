@@ -15,26 +15,19 @@ void gotoxy(int x, int y) {
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), pos);
 }
 
-struct area {
-    int colorNum;
-    int constructPrices[3];
-};
-
+// 땅 문서
 struct deed {
     char name[20];
-    int areaNum;
+    int areaNum; // 빨초노검 구역
+    int isBlank;
     int buildingLevel;
-    int toll;
+    int price[4]; // 대지, 별장1, 별장2, 빌딩, 호텔
+    int toll[4]; // 대지
 
 };
 
-struct area areaInfo[4];
-
-void init_area(int constructPrice[]) {
-    areaInfo[0].colorNum = 1;
-    for (int i = 0; i < 3; i++) {
-        areaInfo[0].constructPrices[i] = constructPrice[i];
-    }
+void init_deed(int constructPrice[]) {
+    
 }
 
 //char cityList[23][20] = {
@@ -49,8 +42,9 @@ void drawGameBoard() {
 }
 
 int main() {
-    int tmpArray
-    initPrice(0, );
+    system("cls");
+    int tmpArray;
+    init_area(0);
 
     printf("%d", strlen("부에노스 아이레스"));
     //drawGameBoard();
