@@ -2,6 +2,7 @@
 #include <string.h>
 #include <Windows.h>
 
+#define BOARD_SIZE 11
 #define DARKGREEN 2    // 도시들
 #define CYAN 3         // 우주정거장, 무인도 등
 #define GREEN 10       // 스위스, 그리스 등
@@ -11,74 +12,121 @@ void setTextColor(int color) {
     SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), color);
 }
 
+void drawHorizontalLine() {
+    setTextColor(GREEN);
+    printf("├────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┤\n");
+}
+
+void drawEmptyRow() {
+    setTextColor(GREEN);
+    printf("│        │        │        │        │        │        │        │        │        │        │        │\n");
+}
+
 void drawBoard() {
-    SetConsoleOutputCP(65001);  // UTF-8 인코딩 설정
+    SetConsoleOutputCP(65001);
+
+    printf("Hello\n");
 
     // 상단 테두리
     setTextColor(GREEN);
-    printf("┌────────┬────────┬────────┬────────┬────────┬────────┬────────┐\n");
+    printf("┌────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┐\n");
 
-    // 첫 번째 줄 (출발~무인도)
-    setTextColor(CYAN);    // 청록색
-    printf("│ 출발   ");
-    setTextColor(DARKGREEN);   // 진한 초록색
-    printf("│ 태국   ");
-    setTextColor(YELLOW);   // 노란색
-    printf("│황금열쇠");
-    setTextColor(CYAN);    // 청록색
-    printf("│우주정거");
-    setTextColor(YELLOW);   // 노란색
-    printf("│황금열쇠");
-    setTextColor(GREEN);    // 초록색
-    printf("│프랑스  ");
-    setTextColor(CYAN);    // 청록색
-    printf("│무인도  │\n");
+    // 첫 번째 줄 (상단)
+    drawEmptyRow();
+    setTextColor(CYAN);
+    printf("│ 출발   │");
+    setTextColor(DARKGREEN);
+    printf(" 타이완 │");
+    setTextColor(YELLOW);
+    printf("황금열쇠│");
+    setTextColor(DARKGREEN);
+    printf(" 싱가폴 │");
+    setTextColor(YELLOW);
+    printf("황금열쇠│");
+    setTextColor(CYAN);
+    printf("우주정거│");
+    setTextColor(YELLOW);
+    printf("황금열쇠│");
+    setTextColor(DARKGREEN);
+    printf(" 태국   │");
+    setTextColor(YELLOW);
+    printf("황금열쇠│");
+    setTextColor(DARKGREEN);
+    printf(" 홍콩   │");
+    setTextColor(CYAN);
+    printf(" 무인도 │\n");
+    drawEmptyRow();
 
-    // 독일, 스위스 줄 (2줄)
-    for(int i = 0; i < 2; i++) {
-        setTextColor(GREEN);
-        printf("├────────┼────────┼────────┼────────┼────────┼────────┼────────┤\n");
-        setTextColor(DARKGREEN);
-        printf("│ 독일   │        │        │        │        │        ");
-        setTextColor(GREEN);
-        printf("│스위스  │\n");
-    }
-
-    // 이탈리아, 그리스 줄 (3줄)
-    for(int i = 0; i < 3; i++) {
-        setTextColor(GREEN);
-        printf("├────────┼────────┼────────┼────────┼────────┼────────┼────────┤\n");
-        setTextColor(DARKGREEN);
-        printf("│이탈리아│        │        │        │        │        ");
-        setTextColor(GREEN);
-        printf("│그리스  │\n");
+    // 중간 부분
+    for(int i = 0; i < 9; i++) {
+        drawHorizontalLine();
+        drawEmptyRow();
+        if(i == 0) {
+            setTextColor(DARKGREEN);
+            printf("│ 마카오 │        │        │        │        │        │        │        │        │        │ 중국   │\n");
+        } else if(i == 1) {
+            setTextColor(DARKGREEN);
+            printf("│ 베트남 │        │        │        │        │        │        │        │        │        │ 일본   │\n");
+        } else if(i == 2) {
+            setTextColor(DARKGREEN);
+            printf("│ 필리핀 │        │        │        │        │        │        │        │        │        │ 러시아 │\n");
+        } else if(i == 3) {
+            setTextColor(DARKGREEN);
+            printf("│대한민국│        │        │        │        │        │        │        │        │        │ 프랑스 │\n");
+        } else if(i == 4) {
+            setTextColor(DARKGREEN);
+            printf("│ 인도   │        │        │        │        │        │        │        │        │        │ 이태리 │\n");
+        } else if(i == 5) {
+            setTextColor(DARKGREEN);
+            printf("│ 독일   │        │        │        │        │        │        │        │        │        │ 영국   │\n");
+        } else if(i == 6) {
+            setTextColor(DARKGREEN);
+            printf("│ 캐나다 │        │        │        │        │        │        │        │        │        │ 스페인 │\n");
+        } else if(i == 7) {
+            setTextColor(DARKGREEN);
+            printf("│브라질  │        │        │        │        │        │        │        │        │        │ 호주   │\n");
+        } else if(i == 8) {
+            setTextColor(DARKGREEN);
+            printf("│멕시코  │        │        │        │        │        │        │        │        │        │스위스  │\n");
+        }
+        drawEmptyRow();
     }
 
     // 마지막 줄 테두리
     setTextColor(GREEN);
-    printf("├────────┼────────┼────────┼────────┼────────┼────────┼────────┤\n");
+    printf("├────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┤\n");
 
-    // 마지막 줄 (사회복지~우주여행)
-    setTextColor(CYAN);    // 청록색
-    printf("│사회복지");
-    setTextColor(DARKGREEN);   // 진한 초록색
-    printf("│ 영국   ");
-    setTextColor(YELLOW);   // 노란색
-    printf("│황금열쇠");
-    setTextColor(DARKGREEN);   // 진한 초록색
-    printf("│ 미국   ");
-    setTextColor(YELLOW);   // 노란색
-    printf("│황금열쇠");
-    setTextColor(DARKGREEN);   // 진한 초록색
-    printf("│캐나다  ");
-    setTextColor(CYAN);    // 청록색
-    printf("│우주여행│\n");
+    // 마지막 줄 (하단)
+    drawEmptyRow();
+    setTextColor(CYAN);
+    printf("│사회복지│");
+    setTextColor(DARKGREEN);
+    printf(" 미국   │");
+    setTextColor(YELLOW);
+    printf("황금열쇠│");
+    setTextColor(DARKGREEN);
+    printf("그리스  │");
+    setTextColor(YELLOW);
+    printf("황금열쇠│");
+    setTextColor(CYAN);
+    printf("세계여행│");
+    setTextColor(YELLOW);
+    printf("황금열쇠│");
+    setTextColor(DARKGREEN);
+    printf("스웨덴  │");
+    setTextColor(YELLOW);
+    printf("황금열쇠│");
+    setTextColor(DARKGREEN);
+    printf("덴마크  │");
+    setTextColor(CYAN);
+    printf("우주여행│\n");
+    drawEmptyRow();
 
     // 하단 테두리
     setTextColor(GREEN);
-    printf("└────────┴────────┴────────┴────────┴────────┴────────┴────────┘\n");
+    printf("└────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┘\n");
 
-    setTextColor(7);  // 기본 색상으로 복귀
+    setTextColor(7);
     printf("\nPress any key to continue . . .");
 }
 
@@ -87,7 +135,7 @@ int main() {
     HWND console = GetConsoleWindow();
     RECT r;
     GetWindowRect(console, &r);
-    MoveWindow(console, r.left, r.top, 800, 600, TRUE);
+    MoveWindow(console, r.left, r.top, 1200, 800, TRUE);
 
     // 콘솔 폰트 설정
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
