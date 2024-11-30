@@ -1,4 +1,4 @@
-﻿#include <stdio.h>
+#include <stdio.h>
 #include <string.h>
 #include <Windows.h>
 
@@ -17,7 +17,32 @@ void drawHorizontalLine() {
     printf("├────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┤\n");
 }
 
-void drawEmptyRow() {
+struct deed {
+    char name[20];
+    int areaNum; // 빨초노검 구역
+    int isBlank;
+    int buildingLevel;
+    int price[4]; // 대지, 별장1, 별장2, 빌딩, 호텔
+    int toll[4]; // 대지
+
+};
+
+void init_deed(int constructPrice[]) {
+    
+}
+
+//char cityList[23][20] = {
+//    "타이베이", "베이징", "마닐라", "싱가포르", "카이로", "이스탄불", 
+//    "아테네", "코펜하겐", "스톡홀름", "베른", "베를린", "오타와",
+//    "부에노스 아이레스", "상파울루", "시드니", "하와이", "리스본", "마드리드",
+//    "도쿄", "파리", "로마", "런던", "뉴욕"
+//};
+
+void drawGameBoard() {
+    textColor(1);
+}
+
+  void drawEmptyRow() {
     setTextColor(GREEN);
     printf("│        │        │        │        │        │        │        │        │        │        │        │\n");
 }
