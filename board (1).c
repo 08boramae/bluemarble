@@ -57,14 +57,6 @@ void init_deed() {
     }
 }
 
-struct player {
-    char name[20];
-    int position;
-    int money;
-};
-
-struct player Player[4];
-
 void init_players(int player_cnt) {
     for (int i = 0; i < player_cnt; i++) {
         printf("플레이어 %d 이름 입력: ", i + 1);
