@@ -1,142 +1,207 @@
-
-//
-// Created by Jaeyoung Jang on 2024-11-11.
-//
-
-#include <stdio.h>
-#include <Windows.h> // ??????? ???
-
-void gotoxy(int x, int y);
-void drawGameBoard();
-
-void gotoxy(int x, int y) {
-    COORD pos = { x*2, y };
-    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), pos);
-}
-
-void drawGameBoard() {
-    for(int i=0; i<10;)
-    gotoxy(2, 3);
-    printf("??");
-}
-
-/*
-
-
-
-*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <windows.h>
 #include <winsock2.h>
+#include <windows.h>
 
-#pragma comment(lib, "ws2_32.lib")  // Winsock library
+#pragma comment(lib, "ws2_32.lib")
 
 #define BUFFER_SIZE 1024
+#define SERVER_IP "127.0.0.1"
+#define SERVER_PORT 12345
 
-// Thread function for receiving messages from the server
-DWORD WINAPI receive_thread(LPVOID socket_desc);
+typedef struct {
+    int money;
+    int position;
+    int playerID;
+    int isMyTurn;
+    int inGame;
+} PlayerState;
 
-// Initialize socket and connect to server
-SOCKET socket_init(const char *ip, int port) {
+PlayerState playerState;
+SOCKET clientSocket;
+CRITICAL_SECTION printLock;
+
+// Function declarations
+void clearScreen() {
+    system("cls");
+}
+
+void displayLobbyCommands() {
+    printf("\n=== Lobby Commands ===\n");
+    printf("CREATE <room_name> - Create a new game room\n");
+    printf("JOIN <room_name> - Join an existing game room\n");
+    printf("LIST - Show list of available rooms\n");
+    printf("QUIT - Exit game\n");
+}
+
+void displayGameCommands() {
+    printf("\n=== Game Commands ===\n");
+    printf("roll - Roll the dice\n");
+    printf("buy - Buy current property\n");
+    printf("build - Build on owned property\n");
+    printf("status - Show current status\n");
+    printf("quit - Exit game\n");
+}
+
+SOCKET connectToServer() {
     WSADATA wsaData;
-    int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (result != 0) {
-        printf("WSAStartup failed with error: %d\n", result);
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        printf("WSAStartup failed\n");
         return INVALID_SOCKET;
     }
 
-    SOCKET sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd == INVALID_SOCKET) {
-        printf("Could not create socket: %d\n", WSAGetLastError());
+    SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock == INVALID_SOCKET) {
+        printf("Socket creation failed\n");
         WSACleanup();
         return INVALID_SOCKET;
     }
 
-    struct sockaddr_in serverAddress;
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(port);
-    serverAddress.sin_addr.s_addr = inet_addr(ip);
+    struct sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(SERVER_PORT);
+    serverAddr.sin_addr.s_addr = inet_addr(SERVER_IP);
 
-    if (connect(sockfd, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0) {
-        printf("Connection failed: %d\n", WSAGetLastError());
-        closesocket(sockfd);
+    if (connect(sock, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        printf("Connection failed\n");
+        closesocket(sock);
         WSACleanup();
         return INVALID_SOCKET;
     }
 
-    printf("Connected to server at %s:%d\n", ip, port);
-    return sockfd;
+    printf("Connected to server!\n");
+    return sock;
 }
 
-// send a message to server
-void socket_send(SOCKET sockfd, const char *message) {
-    send(sockfd, message, strlen(message), 0);
+void handleCommand(const char* command) {
+    if (!playerState.inGame) {
+        if (strncmp(command, "CREATE ", 7) == 0 ||
+            strncmp(command, "JOIN ", 5) == 0 ||
+            strcmp(command, "LIST") == 0 ||
+            strcmp(command, "QUIT") == 0) {
+            send(clientSocket, command, strlen(command), 0);
+            return;
+        }
+
+        if (strcmp(command, "help") == 0) {
+            displayLobbyCommands();
+            return;
+        }
+    } else {
+        if (!playerState.isMyTurn &&
+            strcmp(command, "status") != 0 &&
+            strcmp(command, "quit") != 0) {
+            printf("It's not your turn! (Current turn: Player %d)\n",
+                   playerState.isMyTurn ? playerState.playerID + 1 : ((playerState.playerID + 1) % 2) + 1);
+            return;
+        }
+
+        if (strcmp(command, "help") == 0) {
+            displayGameCommands();
+            return;
+        }
+
+        send(clientSocket, command, strlen(command), 0);
+    }
 }
 
-int main() {
-    // connect server
-    SOCKET sockfd = socket_init("127.0.0.1", 12345);
-    if (sockfd == INVALID_SOCKET) {
-        return 1;
-    }
 
-    // make thread
-    HANDLE recv_thread = CreateThread(NULL, 0, receive_thread, (LPVOID)sockfd, 0, NULL);
-    if (recv_thread == NULL) {
-        printf("Could not create receive thread.\n");
-        closesocket(sockfd);
-        WSACleanup();
-        return 1;
-    }
+DWORD WINAPI receiveThread(LPVOID arg) {
+    char buffer[BUFFER_SIZE];
+    int bytesRead;
 
-    // continue to read and send
-    char user_input[BUFFER_SIZE];
-    while (1) {
-        if (fgets(user_input, BUFFER_SIZE, stdin) == NULL) {
-            break;
+    while ((bytesRead = recv(clientSocket, buffer, BUFFER_SIZE - 1, 0)) > 0) {
+        buffer[bytesRead] = '\0';
+
+        EnterCriticalSection(&printLock);
+
+        if (strncmp(buffer, "GAME_START:", 11) == 0) {
+            sscanf(buffer + 11, "%d", &playerState.playerID);
+            playerState.inGame = 1;
+            clearScreen();
+            printf("Game started! You are Player %d\n", playerState.playerID + 1);
+            displayGameCommands();
+        }
+        else if (strncmp(buffer, "TURN:", 5) == 0) {
+            int turn;
+            sscanf(buffer + 5, "%d", &turn);
+            playerState.isMyTurn = (turn == playerState.playerID);
+            if (playerState.isMyTurn) {
+                printf("\nIt's your turn!\n");
+            }
+        }
+        else if (strncmp(buffer, "STATE:", 6) == 0) {
+            sscanf(buffer + 6, "%d,%d", &playerState.position, &playerState.money);
+            printf("\nPosition: %d, Money: $%d\n", playerState.position, playerState.money);
+        }
+        else {
+            printf("%s", buffer);
         }
 
-        // 만약 사용자 입력이 개행 문자만 있는 경우 무시
-        if (strcmp(user_input, "\n") == 0) {
-            continue;
-        }
-
-        // send
-        socket_send(sockfd, user_input);
+        LeaveCriticalSection(&printLock);
     }
 
-    // wait to recieve
-    WaitForSingleObject(recv_thread, INFINITE);
+    if (bytesRead == 0) {
+        printf("Server disconnected\n");
+    } else {
+        printf("Receive error: %d\n", WSAGetLastError());
+    }
 
-    // goodbye
-    CloseHandle(recv_thread);
-    closesocket(sockfd);
-    WSACleanup();
-
-    printf("Connection closed.\n");
+    closesocket(clientSocket);
     return 0;
 }
 
-// thread fuction for recieve message
-DWORD WINAPI receive_thread(LPVOID socket_desc) {
-    SOCKET sockfd = (SOCKET)socket_desc;
-    char buffer[BUFFER_SIZE];
-    int recv_size;
+int main() {
+    InitializeCriticalSection(&printLock);
 
+    clientSocket = connectToServer();
+    if (clientSocket == INVALID_SOCKET) {
+        return 1;
+    }
+
+    // Initialize player state
+    playerState.money = 3000000;
+    playerState.position = 0;
+    playerState.playerID = -1;
+    playerState.isMyTurn = 0;
+    playerState.inGame = 0;
+
+    // Create receive thread
+    HANDLE hThread = CreateThread(NULL, 0, receiveThread, NULL, 0, NULL);
+    if (hThread == NULL) {
+        printf("Failed to create thread\n");
+        closesocket(clientSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    printf("Welcome to Blue Marble!\n");
+    displayLobbyCommands();
+
+    // Main input loop
+    char input[BUFFER_SIZE];
     while (1) {
-        memset(buffer, 0, BUFFER_SIZE);
-
-        recv_size = recv(sockfd, buffer, BUFFER_SIZE, 0);
-        if (recv_size == SOCKET_ERROR || recv_size == 0) {
-            // Connection closed or error
+        printf("Input: ");
+        if (fgets(input, BUFFER_SIZE, stdin) == NULL) {
             break;
         }
 
-        buffer[recv_size] = '\0';  // Null terminate the received string
-        printf("%s", buffer);
+        input[strcspn(input, "\n")] = 0;  // Remove newline
+
+        if (strlen(input) == 0) {
+            continue;
+        }
+
+        handleCommand(input);
     }
+
+    // Cleanup
+    WaitForSingleObject(hThread, INFINITE);
+    CloseHandle(hThread);
+    DeleteCriticalSection(&printLock);
+    closesocket(clientSocket);
+    WSACleanup();
 
     return 0;
 }

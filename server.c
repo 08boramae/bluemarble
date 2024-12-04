@@ -3,522 +3,376 @@
 #include <string.h>
 #include <winsock2.h>
 #include <windows.h>
-#include <openssl/sha.h>
+#include <time.h>
 
 #pragma comment(lib, "ws2_32.lib")
 
-#define PORT 12345
-#define BUFFER_SIZE 1024
+#define MAX_PLAYERS 4
 #define MAX_ROOMS 10
-#define MAX_CLIENTS 100
+#define BUFFER_SIZE 1024
+#define INITIAL_MONEY 3000000
 
-DWORD WINAPI ClientHandler(LPVOID client_sock_ptr);
-void broadcast_room_list_to_main_screen();
-void broadcast_to_room(int room_index, SOCKET sender_sock, const char *message);
+// 땅 정보 구조체 수정
+typedef struct {
+    char name[50];
+    int price[5];    // 땅값, 집1, 집2, 호텔, 빌딩 순
+    int toll[5];     // 통행료 정보 추가
+} Deed;
+
+const Deed Deeds[32] = {
+    {"출발", {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}},
+    {"타이베이", {50000, 50000, 100000, 150000, 250000}, {2000, 10000, 30000, 90000, 250000}},
+    {"베이징", {80000, 50000, 100000, 150000, 250000}, {4000, 20000, 60000, 180000, 450000}},
+    {"마닐라", {80000, 50000, 100000, 150000, 250000}, {4000, 20000, 60000, 180000, 450000}},
+    {"제주도", {200000, 0, 0, 0, 0}, {300000, 0, 0, 0, 0}},
+    {"싱가포르", {100000, 50000, 100000, 150000, 250000}, {6000, 30000, 90000, 270000, 550000}},
+    {"카이로", {100000, 50000, 100000, 150000, 250000}, {6000, 30000, 90000, 270000, 550000}},
+    {"이스탄불", {120000, 50000, 100000, 150000, 250000}, {8000, 40000, 100000, 300000, 600000}},
+    {"아테네", {140000, 100000, 200000, 300000, 500000}, {10000, 50000, 150000, 450000, 750000}},
+    {"코펜하겐", {160000, 100000, 200000, 300000, 500000}, {12000, 60000, 180000, 500000, 900000}},
+    {"스톡홀름", {160000, 100000, 200000, 300000, 500000}, {12000, 60000, 180000, 500000, 900000}},
+    {"콩코드", {200000, 0, 0, 0, 0}, {300000, 0, 0, 0, 0}},
+    {"베른", {180000, 100000, 200000, 300000, 500000}, {14000, 70000, 200000, 550000, 950000}},
+    {"베를린", {180000, 100000, 200000, 300000, 500000}, {14000, 70000, 200000, 550000, 950000}},
+    {"오타와", {200000, 100000, 200000, 300000, 500000}, {16000, 80000, 220000, 600000, 1000000}},
+    {"부에노스", {220000, 150000, 300000, 450000, 750000}, {18000, 90000, 250000, 700000, 1050000}},
+    {"상파울루", {240000, 150000, 300000, 450000, 750000}, {20000, 100000, 300000, 750000, 1100000}},
+    {"시드니", {240000, 150000, 300000, 450000, 750000}, {20000, 100000, 300000, 750000, 1100000}},
+    {"부산", {500000, 0, 0, 0, 0}, {600000, 0, 0, 0, 0}},
+    {"하와이", {260000, 150000, 300000, 450000, 750000}, {22000, 110000, 330000, 800000, 1150000}},
+    {"리스본", {260000, 150000, 300000, 450000, 750000}, {22000, 110000, 330000, 800000, 1150000}},
+    {"퀸엘리자베스", {300000, 0, 0, 0, 0}, {250000, 0, 0, 0, 0}},
+    {"마드리드", {280000, 150000, 300000, 450000, 750000}, {24000, 120000, 360000, 850000, 1200000}},
+    {"도쿄", {300000, 200000, 400000, 600000, 1000000}, {26000, 130000, 390000, 900000, 1270000}},
+    {"컬럼비아", {450000, 0, 0, 0, 0}, {300000, 0, 0, 0, 0}},
+    {"파리", {320000, 200000, 400000, 600000, 1000000}, {28000, 150000, 450000, 1000000, 1400000}},
+    {"로마", {320000, 200000, 400000, 600000, 1000000}, {28000, 150000, 450000, 1000000, 1400000}},
+    {"런던", {350000, 200000, 400000, 600000, 1000000}, {35000, 170000, 500000, 1100000, 1500000}},
+    {"뉴욕", {350000, 200000, 400000, 600000, 1000000}, {35000, 170000, 500000, 1100000, 1500000}},
+    {"서울", {1000000, 0, 0, 0, 0}, {2000000, 0, 0, 0, 0}},
+    {"사회복지기금", {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}},
+    {"기금납부", {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}}
+};
+
+// 게임룸 구조체
+typedef struct {
+    int position;
+    int money;
+    int properties[32];  // 소유한 땅 정보
+    int buildingLevel[32];  // 각 땅의 건물 레벨
+    SOCKET socket;
+    int isActive;
+    int playerNum;     // 플레이어 번호 (0-3)
+} Player;
 
 typedef struct {
-    char room_name[50];
-    SOCKET participants[2];
-    int participant_count;
-} Room;
+    char name[50];
+    Player players[MAX_PLAYERS];
+    int numPlayers;
+    int currentTurn;
+    int isGameStarted;
+    int properties[32];  // 각 땅의 소유자 정보 (-1: 없음, 0~3: 플레이어 번호)
+} GameRoom;
 
-typedef struct {
-    SOCKET sock;
-    int current_room;
-    int on_main_screen;
-} ClientState;
+// 전역 변수
+GameRoom rooms[MAX_ROOMS];
+int numRooms = 0;
+CRITICAL_SECTION roomLock;
 
-Room chat_rooms[MAX_ROOMS];
-int room_count = 0;
-ClientState clients[MAX_CLIENTS];
-int client_count = 0;
-CRITICAL_SECTION clients_lock;
+// 함수 선언
+void broadcastToRoom(GameRoom* room, const char* message, SOCKET excludeSocket);
+GameRoom* find_room(const char* roomName);
+void start_game(GameRoom* room);
+void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2);
+void handle_property_purchase(GameRoom* room, int playerIndex);
+void handle_build(GameRoom* room, int playerIndex, int position);
 
-const char *websocket_guid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-
-void base64_encode(const unsigned char* input, size_t input_len, char* output, size_t output_size) {
-    static const char* encoding_table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    size_t output_len = 4 * ((input_len + 2) / 3);
-    for (size_t i = 0, j = 0; i < input_len;) {
-        uint32_t octet_a = i < input_len ? (unsigned char)input[i++] : 0;
-        uint32_t octet_b = i < input_len ? (unsigned char)input[i++] : 0;
-        uint32_t octet_c = i < input_len ? (unsigned char)input[i++] : 0;
-        uint32_t triple = (octet_a << 16) | (octet_b << 8) | octet_c;
-        output[j++] = encoding_table[(triple >> 18) & 0x3F];
-        output[j++] = encoding_table[(triple >> 12) & 0x3F];
-        output[j++] = encoding_table[(triple >> 6) & 0x3F];
-        output[j++] = encoding_table[triple & 0x3F];
-    }
-    for (int i = 0; i < (int)(output_len % 4); i++) {
-        output[output_len - 1 - i] = '=';
-    }
-    output[output_len] = '\0';
-}
-
-int send_websocket_frame(SOCKET sock, const char* message) {
-    if (sock == INVALID_SOCKET) {
-        return -1;
-    }
-    size_t message_length = strlen(message);
-    int frame_size = 2;
-
-    if (message_length <= 125) {
-        frame_size += message_length;
-    } else if (message_length <= 65535) {
-        frame_size += 2 + message_length;
-    } else {
-        frame_size += 8 + message_length;
-    }
-
-    unsigned char *frame = malloc(frame_size);
-    frame[0] = 0x81;  // FIN bit set and text frame
-    if (message_length <= 125) {
-        frame[1] = (unsigned char)message_length;
-        memcpy(&frame[2], message, message_length);
-    } else if (message_length <= 65535) {
-        frame[1] = 126;
-        frame[2] = (message_length >> 8) & 0xFF;
-        frame[3] = message_length & 0xFF;
-        memcpy(&frame[4], message, message_length);
-    } else {
-        frame[1] = 127;
-        for (int i = 0; i < 8; i++) {
-            frame[2 + i] = (unsigned char)((message_length >> ((7 - i) * 8)) & 0xFF);
+// 방 찾기 함수
+GameRoom* find_room(const char* roomName) {
+    for (int i = 0; i < numRooms; i++) {
+        if (strcmp(rooms[i].name, roomName) == 0) {
+            return &rooms[i];
         }
-        memcpy(&frame[10], message, message_length);
     }
-
-    int sent = send(sock, (char *)frame, frame_size, 0);
-    free(frame);
-    return sent;
+    return NULL;
 }
 
-int recv_websocket_frame(SOCKET sock, char* buffer, int buffer_size) {
-    char temp[BUFFER_SIZE];
-    int ret = recv(sock, temp, BUFFER_SIZE, 0);
-    if (ret <= 0) {
-        return ret;
-    }
+// 게임 시작 함수
+void start_game(GameRoom* room) {
+    room->isGameStarted = 1;
+    room->currentTurn = 0;  // 첫 번째 플레이어(0)부터 시작
 
-    unsigned char opcode = temp[0] & 0x0F;
-    if (opcode == 0x8) {
-        // Close frame
-        printf("Close frame received. Closing connection.\n");
-        return 0;
-    }
-
-    int masked = (temp[1] & 0x80) != 0;
-    size_t payloadLength = temp[1] & 0x7F;
-    size_t payloadDataIndex = 2;
-
-    if (payloadLength == 126) {
-        payloadLength = (temp[2] << 8) | temp[3];
-        payloadDataIndex = 4;
-    } else if (payloadLength == 127) {
-        payloadLength = 0;
-        for (int i = 0; i < 8; i++) {
-            payloadLength = (payloadLength << 8) | (unsigned char)temp[2 + i];
-        }
-        payloadDataIndex = 10;
-    }
-
-    unsigned char *maskingKey = NULL;
-    if (masked) {
-        maskingKey = (unsigned char*)&temp[payloadDataIndex];
-        payloadDataIndex += 4;
-    }
-
-    if (payloadLength > (size_t)(buffer_size - 1)) {
-        printf("Payload is too large to fit into the buffer.\n");
-        return -1;
-    }
-
-    for (size_t i = 0; i < payloadLength; i++) {
-        unsigned char byteData = temp[payloadDataIndex + i];
-        if (masked) {
-            byteData ^= maskingKey[i % 4];
-        }
-        buffer[i] = byteData;
-    }
-
-    buffer[payloadLength] = '\0';
-    return (int)payloadLength;
-}
-
-SOCKET server_socket_init() {
-    WSADATA wsa;
-    SOCKET server_sock;
-    struct sockaddr_in server_addr;
-
-    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-        printf("WSAStartup failed: %d\n", WSAGetLastError());
-        return INVALID_SOCKET;
-    }
-
-    server_sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_sock == INVALID_SOCKET) {
-        printf("Could not create socket: %d\n", WSAGetLastError());
-        WSACleanup();
-        return INVALID_SOCKET;
-    }
-
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(PORT);
-
-    if (bind(server_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
-        printf("Bind failed: %d\n", WSAGetLastError());
-        closesocket(server_sock);
-        WSACleanup();
-        return INVALID_SOCKET;
-    }
-
-    if (listen(server_sock, 3) == SOCKET_ERROR) {
-        printf("Listen failed: %d\n", WSAGetLastError());
-        closesocket(server_sock);
-        WSACleanup();
-        return INVALID_SOCKET;
-    }
-
-    printf("Server started on port %d.\n", PORT);
-    return server_sock;
-}
-
-SOCKET accept_client(SOCKET server_sock) {
-    struct sockaddr_in client_addr;
-    int client_addr_size = sizeof(client_addr);
-    SOCKET client_sock = accept(server_sock, (struct sockaddr *)&client_addr, &client_addr_size);
-
-    if (client_sock == INVALID_SOCKET) {
-        printf("Accept failed: %d\n", WSAGetLastError());
-    } else {
-        printf("Connection accepted from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-    }
-    return client_sock;
-}
-
-int websocket_handshake(SOCKET client_sock) {
     char buffer[BUFFER_SIZE];
-    int received = recv(client_sock, buffer, BUFFER_SIZE, 0);
-    if (received <= 0) {
-        return 0;
+    // 게임 시작 알림
+    for (int i = 0; i < room->numPlayers; i++) {
+        sprintf(buffer, "GAME_START:0");  // 모든 플레이어에게 동일한 시작 메시지
+        send(room->players[i].socket, buffer, strlen(buffer), 0);
     }
 
-    buffer[received] = '\0';
+    Sleep(500);  // 잠시 대기
 
-    if (strstr(buffer, "Upgrade: websocket") == NULL) {
-        printf("No WebSocket upgrade requested.\n");
-        return 0;
-    }
-
-    char *keyHeader = strstr(buffer, "Sec-WebSocket-Key: ");
-    if (!keyHeader) {
-        printf("Sec-WebSocket-Key not found.\n");
-        return 0;
-    }
-
-    keyHeader += 19;
-    char secWebSocketKey[60] = {0};
-    int i = 0;
-    while (keyHeader[i] != '\r' && keyHeader[i] != '\n' && i < 60) {
-        secWebSocketKey[i] = keyHeader[i];
-        i++;
-    }
-
-    char concatenated[128];
-    sprintf(concatenated, "%s%s", secWebSocketKey, websocket_guid);
-
-    unsigned char shaHash[SHA_DIGEST_LENGTH];
-    SHA1((unsigned char*)concatenated, strlen(concatenated), shaHash);
-
-    char secWebSocketAccept[64] = {0};
-    base64_encode(shaHash, SHA_DIGEST_LENGTH, secWebSocketAccept, sizeof(secWebSocketAccept));
-
-    char response[BUFFER_SIZE];
-    sprintf(response,
-        "HTTP/1.1 101 Switching Protocols\r\n"
-        "Upgrade: websocket\r\n"
-        "Connection: Upgrade\r\n"
-        "Sec-WebSocket-Accept: %s\r\n\r\n",
-        secWebSocketAccept
-    );
-
-    send(client_sock, response, strlen(response), 0);
-    return 1;
+    // 첫 턴 알림
+    sprintf(buffer, "TURN:0");  // 첫 턴은 항상 0번 플레이어
+    broadcastToRoom(room, buffer, INVALID_SOCKET);
 }
 
-void broadcast_room_list_to_main_screen() {
-    EnterCriticalSection(&clients_lock);
-    for (int i = 0; i < client_count; i++) {
-        if (clients[i].on_main_screen && clients[i].sock != INVALID_SOCKET) {
-            char room_info[BUFFER_SIZE] = {0};
-            strcat(room_info, "Available rooms:\n");
-            for (int j = 0; j < room_count; j++) {
-                char room_line[100];
-                sprintf(room_line, "%s (Participants: %d/2)\n", chat_rooms[j].room_name, chat_rooms[j].participant_count);
-                strcat(room_info, room_line);
-            }
-            if (room_count == 0) {
-                strcat(room_info, "No rooms available.\n");
-            }
-            strcat(room_info, "\nTo create a new room, type: CREATE <room_name>\n");
-            strcat(room_info, "To join an existing room, type: JOIN <room_name>\n");
-            strcat(room_info, "Your choice: ");
-            send_websocket_frame(clients[i].sock, room_info);
-        }
-    }
-    LeaveCriticalSection(&clients_lock);
-}
-
-int create_room(const char *room_name) {
-    if (room_count >= MAX_ROOMS) {
-        return -1;
-    }
-
-    strcpy(chat_rooms[room_count].room_name, room_name);
-    chat_rooms[room_count].participants[0] = INVALID_SOCKET;
-    chat_rooms[room_count].participants[1] = INVALID_SOCKET;
-    chat_rooms[room_count].participant_count = 0;
-    room_count++;
-
-    return room_count - 1;
-}
-
-int find_room_by_name(const char *room_name) {
-    for (int i = 0; i < room_count; i++) {
-        if (strcmp(chat_rooms[i].room_name, room_name) == 0) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-int join_room(int room_index, SOCKET client_sock) {
-    if (room_index < 0 || room_index >= room_count) {
-        return -1;
-    }
-
-    Room *room = &chat_rooms[room_index];
-    if (room->participant_count >= 2) {
-        return -2;
-    }
-
-    room->participants[room->participant_count] = client_sock;
-    room->participant_count++;
-    return 0;
-}
-
-void broadcast_to_room(int room_index, SOCKET sender_sock, const char *message) {
-    Room *room = &chat_rooms[room_index];
-    for (int i = 0; i < room->participant_count; i++) {
-        if (room->participants[i] != sender_sock && room->participants[i] != INVALID_SOCKET) {
-            send_websocket_frame(room->participants[i], message);
+// 브로드캐스트 함수
+void broadcastToRoom(GameRoom* room, const char* message, SOCKET excludeSocket) {
+    for (int i = 0; i < room->numPlayers; i++) {
+        if (room->players[i].isActive && room->players[i].socket != excludeSocket) {
+            send(room->players[i].socket, message, strlen(message), 0);
         }
     }
 }
 
-void leave_room(int room_index, SOCKET client_sock) {
-    if (room_index < 0 || room_index >= room_count) {
+// 주사위 굴리기 처리
+void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2) {
+    if (room->currentTurn != playerIndex) {
+        return;  // 자신의 턴이 아니면 무시
+    }
+
+    Player* player = &room->players[playerIndex];
+    char msg[BUFFER_SIZE];
+
+    // 주사위 결과 브로드캐스트
+    sprintf(msg, "DICE:%d,%d", dice1, dice2);
+    broadcastToRoom(room, msg, INVALID_SOCKET);
+
+    Sleep(1000);  // 주사위 결과를 보여줄 시간
+
+    // 말 이동
+    int oldPos = player->position;
+    player->position = (oldPos + dice1 + dice2) % 40;
+
+    // 이동 결과 브로드캐스트
+    sprintf(msg, "MOVE:%d,%d", playerIndex, player->position);
+    broadcastToRoom(room, msg, INVALID_SOCKET);
+
+    Sleep(1000);  // 이동을 보여줄 시간
+
+    // 출발지 통과 시 월급 지급
+    if (oldPos > player->position) {
+        player->money += 200000;
+        sprintf(msg, "SALARY:%d,%d", playerIndex, player->money);
+        broadcastToRoom(room, msg, INVALID_SOCKET);
+    }
+
+    // 땅 구매 가능 여부 확인 및 알림
+    if (player->position < 32 && room->properties[player->position] == 0) {
+        sprintf(msg, "CAN_BUY:%d", player->position);
+        send(player->socket, msg, strlen(msg), 0);
+    }
+
+    // 더블이 아닐 경우에만 턴 변경
+    if (dice1 != dice2) {
+        room->currentTurn = (room->currentTurn + 1) % room->numPlayers;
+        sprintf(msg, "TURN:%d", room->currentTurn);
+        broadcastToRoom(room, msg, INVALID_SOCKET);
+    }
+}
+
+// 건물 건설 처리 함수 추가
+void handle_build(GameRoom* room, int playerIndex, int position) {
+    Player* player = &room->players[playerIndex];
+    char msg[BUFFER_SIZE];
+    int buildCost;
+
+    // 건물 건설 가능 여부 확인
+    if (position < 0 || position >= 32 ||
+        player->properties[position] != 1 ||
+        player->money < Deeds[position].price[player->buildingLevel[position] + 1]) {
+        sprintf(msg, "BUILD_FAILED:%d", position);
+        send(player->socket, msg, strlen(msg), 0);
         return;
     }
 
-    Room *room = &chat_rooms[room_index];
-    for (int i = 0; i < room->participant_count; i++) {
-        if (room->participants[i] == client_sock) {
-            for (int j = i; j < room->participant_count - 1; j++) {
-                room->participants[j] = room->participants[j + 1];
-            }
-            room->participants[room->participant_count - 1] = INVALID_SOCKET;
-            room->participant_count--;
-            break;
-        }
-    }
+    buildCost = Deeds[position].price[player->buildingLevel[position] + 1];
+    player->money -= buildCost;
+    player->buildingLevel[position]++;
+
+    sprintf(msg, "BUILD_SUCCESS:%d,%d,%d", position, player->buildingLevel[position], player->money);
+    broadcastToRoom(room, msg, INVALID_SOCKET);
 }
 
-DWORD WINAPI ClientHandler(LPVOID client_sock_ptr) {
-    SOCKET client_sock = *(SOCKET *)client_sock_ptr;
-    free(client_sock_ptr);
-
-    if (!websocket_handshake(client_sock)) {
-        closesocket(client_sock);
-        return 1;
-    }
-
-    int index = -1;
-    EnterCriticalSection(&clients_lock);
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        if (clients[i].sock == INVALID_SOCKET) {
-            clients[i].sock = client_sock;
-            clients[i].current_room = -1;
-            clients[i].on_main_screen = 1;
-            index = i;
-            if (i >= client_count) {
-                client_count = i + 1;
-            }
-            break;
-        }
-    }
-    LeaveCriticalSection(&clients_lock);
-
-    if (index == -1) {
-        send_websocket_frame(client_sock, "Server is full. Please try again later.\n");
-        closesocket(client_sock);
-        return 1;
-    }
-
+// 클라이언트 처리 스레드
+DWORD WINAPI client_handler(LPVOID clientSocket) {
+    SOCKET sock = *(SOCKET*)clientSocket;
+    free(clientSocket);
     char buffer[BUFFER_SIZE];
-    int current_room = -1;
-
-    broadcast_room_list_to_main_screen();
+    int roomIndex = -1;
+    int playerIndex = -1;
 
     while (1) {
-        memset(buffer, 0, BUFFER_SIZE);
-        int payload_length = recv_websocket_frame(client_sock, buffer, BUFFER_SIZE);
-        if (payload_length <= 0) {
-            printf("Client disconnected or closed WebSocket.\n");
+        int bytesReceived = recv(sock, buffer, BUFFER_SIZE - 1, 0);
+        if (bytesReceived <= 0) {
             break;
         }
+        buffer[bytesReceived] = '\0';
 
-        if (clients[index].on_main_screen) {
-            char command[50], room_name[50];
-            int parsed_count = sscanf(buffer, "%s %49[^\n]", command, room_name);
+        EnterCriticalSection(&roomLock);
 
-            if (parsed_count < 1) {
-                send_websocket_frame(client_sock, "Invalid command. Please try again.\n");
-                continue;
-            }
+        // 방 생성 처리
+        if (strncmp(buffer, "CREATE ", 7) == 0) {
+            if (numRooms < MAX_ROOMS) {
+                char* roomName = buffer + 7;
+                if (find_room(roomName) == NULL) {
+                    strcpy(rooms[numRooms].name, roomName);
+                    rooms[numRooms].numPlayers = 1;
+                    rooms[numRooms].isGameStarted = 0;
+                    rooms[numRooms].currentTurn = 0;
 
-            if (strcmp(command, "CREATE") == 0) {
-                if (parsed_count < 2) {
-                    send_websocket_frame(client_sock, "Please give a room name. Usage: CREATE <room_name>\n");
-                    continue;
+                    // 방장은 항상 플레이어 0
+                    Player* player = &rooms[numRooms].players[0];
+                    player->socket = sock;
+                    player->isActive = 1;
+                    player->money = INITIAL_MONEY;
+                    player->position = 0;
+                    player->playerNum = 0;
+
+                    roomIndex = numRooms;
+                    playerIndex = 0;
+                    numRooms++;
+
+                    // 방장에게 플레이어 번호 전송
+                    char msg[BUFFER_SIZE];
+                    sprintf(msg, "PLAYER_NUM:%d", 0);
+                    send(sock, msg, strlen(msg), 0);
+
+                    send(sock, "CREATED:방이 생성되었습니다.\n", 100, 0);
                 }
-
-                int room_index = find_room_by_name(room_name);
-                if (room_index != -1) {
-                    send_websocket_frame(client_sock, "Room already exists.\n");
-                    continue;
-                }
-
-                room_index = create_room(room_name);
-                if (room_index == -1) {
-                    send_websocket_frame(client_sock, "Cannot create more rooms.\n");
-                    continue;
-                }
-
-                join_room(room_index, client_sock);
-                current_room = room_index;
-                clients[index].current_room = room_index;
-                clients[index].on_main_screen = 0;
-                send_websocket_frame(client_sock, "Room created and joined successfully.\nType 'LEAVE' to exit the room.\n");
-
-                broadcast_room_list_to_main_screen();
-
-                broadcast_to_room(room_index, client_sock, "A new user has joined the room.\n");
-
-            } else if (strcmp(command, "JOIN") == 0) {
-                if (parsed_count < 2) {
-                    send_websocket_frame(client_sock, "Please give a room name. Usage: JOIN <room_name>\n");
-                    continue;
-                }
-
-                int room_index = find_room_by_name(room_name);
-                if (room_index == -1) {
-                    send_websocket_frame(client_sock, "Room does not exist.\n");
-                    continue;
-                }
-
-                int join_result = join_room(room_index, client_sock);
-                if (join_result == -2) {
-                    send_websocket_frame(client_sock, "Room is full.\n");
-                    continue;
-                } else if (join_result == -1) {
-                    send_websocket_frame(client_sock, "An error occurred. Please try again.\n");
-                    continue;
-                }
-
-                current_room = room_index;
-                clients[index].current_room = room_index;
-                clients[index].on_main_screen = 0;
-                send_websocket_frame(client_sock, "Joined room successfully.\nType 'LEAVE' to exit the room.\n");
-
-                broadcast_to_room(room_index, client_sock, "A new user has joined the room.\n");
-
-                broadcast_room_list_to_main_screen();
-
-            } else {
-                send_websocket_frame(client_sock, "Invalid command. Please use CREATE or JOIN followed by the room name.\n");
-            }
-        } else {
-            if (strcmp(buffer, "LEAVE") == 0) {
-                leave_room(current_room, client_sock);
-                clients[index].current_room = -1;
-                clients[index].on_main_screen = 1;
-                send_websocket_frame(client_sock, "You have left the room.\n");
-                broadcast_to_room(current_room, client_sock, "A user has left the room.\n");
-                current_room = -1;
-
-                broadcast_room_list_to_main_screen();
-            } else {
-                broadcast_to_room(current_room, client_sock, buffer);
             }
         }
+        // 방 참가 처리
+        else if (strncmp(buffer, "JOIN ", 5) == 0) {
+            char* roomName = buffer + 5;
+            GameRoom* room = find_room(roomName);
+            if (room && !room->isGameStarted && room->numPlayers < MAX_PLAYERS) {
+                playerIndex = room->numPlayers;
+                Player* player = &room->players[playerIndex];
+                player->socket = sock;
+                player->isActive = 1;
+                player->money = INITIAL_MONEY;
+                player->position = 0;
+                player->playerNum = playerIndex;
+                room->numPlayers++;
+
+                // 참가자에게 플레이어 번호 전송
+                char msg[BUFFER_SIZE];
+                sprintf(msg, "PLAYER_NUM:%d", playerIndex);
+                send(sock, msg, strlen(msg), 0);
+
+                // 모든 플레이어에게 참가 알림
+                sprintf(msg, "JOIN:플레이어 %d가 참가했습니다. (%d/%d)\n",
+                        playerIndex + 1, room->numPlayers, MAX_PLAYERS);
+                broadcastToRoom(room, msg, INVALID_SOCKET);
+
+                if (room->numPlayers >= 2) {
+                    Sleep(1000);  // 잠시 대기
+                    start_game(room);
+                }
+            } else {
+                // 방 입장 실패 메시지 전송
+                send(sock, "JOIN_FAILED:방을 찾을 수 없거나 입장할 수 없습니다.\n", 100, 0);
+            }
+        }
+        // 게임 진행 중 명령 처리
+        else if (roomIndex != -1 && rooms[roomIndex].isGameStarted) {
+            GameRoom* room = &rooms[roomIndex];
+
+            if (strncmp(buffer, "ROLL:", 5) == 0) {
+                if (room->currentTurn == playerIndex) {
+                    int dice1, dice2;
+                    sscanf(buffer + 5, "%d,%d", &dice1, &dice2);
+
+                    // 주사위 결과 브로드캐스트
+                    char msg[BUFFER_SIZE];
+                    sprintf(msg, "DICE:%d,%d", dice1, dice2);
+                    broadcastToRoom(room, msg, INVALID_SOCKET);
+
+                    // 말 이동
+                    int newPos = (room->players[playerIndex].position + dice1 + dice2) % 40;
+                    room->players[playerIndex].position = newPos;
+                    sprintf(msg, "MOVE:%d,%d", playerIndex, newPos);
+                    broadcastToRoom(room, msg, INVALID_SOCKET);
+
+                    // 더블이 아니면 턴 변경
+                    if (dice1 != dice2) {
+                        room->currentTurn = (room->currentTurn + 1) % room->numPlayers;
+                        sprintf(msg, "TURN:%d", room->currentTurn);
+                        broadcastToRoom(room, msg, INVALID_SOCKET);
+                    }
+                }
+            }
+            else if (strncmp(buffer, "BUILD:", 6) == 0) {
+                int position;
+                sscanf(buffer + 6, "%d", &position);
+                handle_build(room, playerIndex, position);
+            }
+        }
+
+        LeaveCriticalSection(&roomLock);
     }
 
-    if (current_room != -1) {
-        leave_room(current_room, client_sock);
-        broadcast_to_room(current_room, client_sock, "A user has left the room.\n");
+    // 연결 종료 처리
+    if (roomIndex != -1 && playerIndex != -1) {
+        EnterCriticalSection(&roomLock);
+        GameRoom* room = &rooms[roomIndex];
+        room->players[playerIndex].isActive = 0;
+        char msg[BUFFER_SIZE];
+        sprintf(msg, "QUIT:플레이어 %d가 나갔습니다.\n", playerIndex + 1);
+        broadcastToRoom(room, msg, sock);
+        LeaveCriticalSection(&roomLock);
     }
 
-    closesocket(client_sock);
-
-    EnterCriticalSection(&clients_lock);
-    clients[index].sock = INVALID_SOCKET;
-    clients[index].current_room = -1;
-    clients[index].on_main_screen = 0;
-    LeaveCriticalSection(&clients_lock);
-
-    printf("Client handler thread closing.\n");
+    closesocket(sock);
     return 0;
 }
 
 int main() {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        printf("WSAStartup failed. Error: %d\n", WSAGetLastError());
+        printf("WSAStartup 실패\n");
         return 1;
     }
 
-    SOCKET server_sock = server_socket_init();
-    InitializeCriticalSection(&clients_lock);
+    InitializeCriticalSection(&roomLock);
 
-    if (server_sock == INVALID_SOCKET) {
-        printf("Failed to initialize server.\n");
-        DeleteCriticalSection(&clients_lock);
-        WSACleanup();
+    SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSocket == INVALID_SOCKET) {
+        printf("소켓 ���성 실패\n");
         return 1;
     }
 
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        clients[i].sock = INVALID_SOCKET;
-        clients[i].current_room = -1;
-        clients[i].on_main_screen = 0;
+    struct sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_port = htons(12345);
+
+    if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+        printf("바인드 실패\n");
+        closesocket(serverSocket);
+        return 1;
     }
 
-    printf("Waiting for new WebSocket clients...\n");
+    if (listen(serverSocket, 5) == SOCKET_ERROR) {
+        printf("리슨 실패\n");
+        closesocket(serverSocket);
+        return 1;
+    }
+
+    printf("서버가 시작되었습니다. (포트: 12345)\n");
 
     while (1) {
-        SOCKET client_sock = accept_client(server_sock);
+        SOCKET* clientSocket = malloc(sizeof(SOCKET));
+        *clientSocket = accept(serverSocket, NULL, NULL);
 
-        if (client_sock != INVALID_SOCKET) {
-            SOCKET *client_sock_ptr = malloc(sizeof(SOCKET));
-            *client_sock_ptr = client_sock;
-            CreateThread(NULL, 0, ClientHandler, (LPVOID)client_sock_ptr, 0, NULL);
+        if (*clientSocket != INVALID_SOCKET) {
+            CreateThread(NULL, 0, client_handler, clientSocket, 0, NULL);
         }
     }
 
-    closesocket(server_sock);
-    DeleteCriticalSection(&clients_lock);
+    DeleteCriticalSection(&roomLock);
+    closesocket(serverSocket);
     WSACleanup();
     return 0;
 }
