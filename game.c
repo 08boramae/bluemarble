@@ -10,13 +10,14 @@
 #define BLUE 9
 #define GREEN 10
 #define YELLOW 14
+#define WHITE 15
 
 void textColor(int colorNum);
 void gotoxy(int x, int y);
-void printInCell(int x, int y, char* text, int price);
+void printInCell(int x, int y, char* text, int price, int idx);
 void draw_board();
-struct deed* init_deeds();
-struct player* init_players(int player_cnt);
+void init_deeds();
+void init_players(int player_cnt);
 int roll_dice();
 void buy_land(struct player* player, struct deed* land);
 void pay_toll(struct player* player, struct deed* land);
@@ -45,7 +46,9 @@ struct goldenKey {
 };
 
 struct deed Deeds[29];
-struct player Players[4];
+struct player Players[2];
+
+int curr_arrow_pos;
 
 void textColor(int colorNum) {
     SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), colorNum);
@@ -56,13 +59,25 @@ void gotoxy(int x, int y) {
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), pos);
 }
 
-void printInCell(int x, int y, char* text, int price) {
+void printInCell(int x, int y, char* text, int price, int idx) {
     char line[2][10 + 1] = { "" };  // 줄바꿈된 텍스트를 저장할 배열
     int len = strlen(text);                        // 텍스트 길이
     int currentLine = 0, currentChar = 0;          // 현재 줄과 문자 위치
 
     if (!strcmp(text, "황금열쇠")) {
         textColor(6);
+    }
+    else if (!strcmp(text, "출발      <---")) {
+        textColor(RED);
+    }
+    else if (!strcmp(text, "무인도")) {
+        textColor(GREEN);
+    }
+    else if (!strcmp(text, "사회복지기금 수령처")) {
+        textColor(6);
+    }
+    else if (!strcmp(text, "우주여행")) {
+        textColor(13);
     }
 
     // 문자열을 칸 너비에 맞게 나누기
@@ -84,17 +99,103 @@ void printInCell(int x, int y, char* text, int price) {
         else {
             gotoxy(x, y + i);                        // 각 줄의 위치 설정
         }
-        printf("%s", line[i]);
+        printf("%s\n", line[i]);
     }
+    //if (Players[0].position == idx) {
+    //    textColor(RED);
+    //    printf("●");
+    //}
+    //if (Players[1].position == idx) {
+    //    textColor(BLUE);
+    //    printf("●");
+    //}
+    //textColor(WHITE);
 
     // 금액 출력 (칸의 마지막 줄에 배치)
     if(price) {
         gotoxy(x, y + 3);
         printf("%d원", price);
     }
+    textColor(WHITE);
+
+
+    // 플레이어 말 출력
+}
+
+void show_player_status() {
+    gotoxy(140, 15);
+    textColor(RED);
+    printf("Player1 정보");
+    gotoxy(140, 16);
+    printf("위치: %d", Players[0].position);
+    gotoxy(140, 17);
+    printf("자금: %d원", Players[0].money);
+
+    gotoxy(140, 19);
+    textColor(BLUE);
+    printf("Player2 정보");
+    gotoxy(140, 20);
+    printf("위치: %d", Players[1].position);
+    gotoxy(140, 21);
+    printf("자금: %d원", Players[1].money);
+
     textColor(15);
 }
 
+void draw_players() {
+    char* player1_marker = "●";
+    char* player2_marker = "●";
+    int p1_x, p1_y, p2_x, p2_y;
+
+    // Player1 위치 계산 (빨간색)
+    if (0 <= Players[0].position && Players[0].position <= 9) {
+        p1_x = 111 - (Players[0].position * 11);
+        p1_y = 52;
+    }
+    else if (10 <= Players[0].position && Players[0].position <= 19) {
+        p1_x = 1;
+        p1_y = 51 - ((Players[0].position - 10) * 5);
+    }
+    else if (20 <= Players[0].position && Players[0].position <= 29) {
+        p1_x = 1 + ((Players[0].position - 20) * 11);
+        p1_y = 1;
+    }
+    else if (30 <= Players[0].position && Players[0].position <= 39) {
+        p1_x = 112;
+        p1_y = 1 + ((Players[0].position - 30) * 5);
+    }
+
+    // Player2 위치 계산 (파란색)
+    if (0 <= Players[1].position && Players[1].position <= 9) {
+        p2_x = 111 - (Players[1].position * 11) + 2;  // Player1보다 약간 오른쪽에 위치
+        p2_y = 52;
+    }
+    else if (10 <= Players[1].position && Players[1].position <= 19) {
+        p2_x = 1;
+        p2_y = 51 - ((Players[1].position - 10) * 5) + 1;  // Player1보다 약간 아래에 위치
+    }
+    else if (20 <= Players[1].position && Players[1].position <= 29) {
+        p2_x = 1 + ((Players[1].position - 20) * 11) + 2;
+        p2_y = 1;
+    }
+    else if (30 <= Players[1].position && Players[1].position <= 39) {
+        p2_x = 112;
+        p2_y = 1 + ((Players[1].position - 30) * 5) + 1;
+    }
+
+    // Player1 (빨간색) 표시
+    gotoxy(p1_x, p1_y);
+    textColor(RED);
+    printf("%s", player1_marker);
+
+    // Player2 (파란색) 표시
+    gotoxy(p2_x, p2_y);
+    textColor(BLUE);
+    printf("%s", player2_marker);
+
+    // 색상 원래대로
+    textColor(15);
+}
 
 void draw_board() {
     //맨 윗라인
@@ -132,9 +233,6 @@ void draw_board() {
     }
     puts("└──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┘");
 
-    for (int i = 0; i < 7; i++) {
-
-    }
 
 
     char title_art[12][150] = {
@@ -181,11 +279,13 @@ void draw_board() {
         "└────────────────────────────┘"
     };
 
+    textColor(YELLOW);
     int key_x=47, key_y=40;
     for (int i = 0; i < 7; i++) {
         gotoxy(key_x, key_y + i);
         puts(key_art[i]);
     }
+    textColor(15);
 
 
     // (x,y)에서 시작
@@ -197,48 +297,48 @@ void draw_board() {
     int curr_x = 111, curr_y = 51;
     for (int i = 0; i < 10; i++) {
         if (!strcmp(names[i], "1")) {
-            printInCell(curr_x, curr_y, Deeds[cnt].name, 0);
+            printInCell(curr_x, curr_y, Deeds[cnt].name, 0, i);
             cnt++;
             curr_x -= 11;
         }
         else {
-            printInCell(curr_x, curr_y, names[i], 0);
+            printInCell(curr_x, curr_y, names[i], 0, i);
             curr_x -= 11;
         }
     }
 
     for (int i = 10; i < 20; i++) {
         if (!strcmp(names[i], "1")) {
-            printInCell(curr_x, curr_y, Deeds[cnt].name, 0);
+            printInCell(curr_x, curr_y, Deeds[cnt].name, 0, i);
             cnt++;
             curr_y -= 5;
         }
         else {
-            printInCell(curr_x, curr_y, names[i], 0);
+            printInCell(curr_x, curr_y, names[i], 0, i);
             curr_y -= 5;
         }
     }
 
     for (int i = 20; i < 30; i++) {
         if (!strcmp(names[i], "1")) {
-            printInCell(curr_x, curr_y, Deeds[cnt].name, 0);
+            printInCell(curr_x, curr_y, Deeds[cnt].name, 0, i);
             cnt++;
             curr_x += 11;
         }
         else {
-            printInCell(curr_x, curr_y, names[i], 0);
+            printInCell(curr_x, curr_y, names[i], 0, i);
             curr_x += 11;
         }
     }
 
     for (int i = 30; i < 40; i++) {
         if (!strcmp(names[i], "1")) {
-            printInCell(curr_x, curr_y, Deeds[cnt].name, 0);
+            printInCell(curr_x, curr_y, Deeds[cnt].name, 0, i);
             cnt++;
             curr_y += 5;
         }
         else {
-            printInCell(curr_x, curr_y, names[i], 0);
+            printInCell(curr_x, curr_y, names[i], 0, i);
             curr_y += 5;
         }
     }
@@ -264,14 +364,16 @@ void draw_board() {
         puts(dice_board_art[i]);
     }
 
+
+    show_player_status();
     
 
 }
 
 
-struct deed* init_deeds() {
+void init_deeds() {
     char names[29][40] = {
-    "타이베이", "베이징", "마닐라", "제주도", "싱가포르", "카이로", "이스탄불",
+    "타이베이", "베이징", "마닐라", "제주도", "싱가포르", "카이로", "이스탄불", 
     "아네테", "코펜하겐", "스톡홀름", "콩코드 여객기", "베른", "베를린", "오타와",
     "부에노스 아이레스", "상파울루", "시드니", "부산", "하와이", "리스본", "퀸 엘리자베스 호", "마드리드",
     "도쿄", "컬럼비아호", "파리", "로마", "런던", "뉴욕", "서울"
@@ -307,187 +409,279 @@ struct deed* init_deeds() {
             Deeds[j].areaNum = i;
         }
     }
-
-    return Deeds;
 }
 
-struct player* init_players(int player_cnt) {
+void init_players(int player_cnt) {
     for (int i = 0; i < player_cnt; i++) {
         Players[i].position = 0;
         Players[i].money = 2430000;
     }
-    return Players;
 }
 
 int pick_golden_key(struct player* player) {
     printf("1");
 }
 
-int roll_dice() {
-    int dice = (rand() % 6) + 1;
+void draw_dice(int num, int is_second) {
+    // 주사위 시작 위치 (첫 번째 주사위는 왼쪽, 두 번째는 오른쪽)
+    int start_x = is_second ? 67 : 47;
+    int start_y = 29;
 
-    return dice;
+    // 주사위 테두리와 내부
+    char* dice_art[5] = {
+        "┌───────┐",
+        "│       │",
+        "│       │",
+        "│       │",
+        "└───────┘"
+    };
+
+    // 주사위 그리기
+    for (int i = 0; i < 5; i++) {
+        gotoxy(start_x, start_y + i);
+        printf("%s", dice_art[i]);
+    }
+
+    // 주사위 눈 그리기
+    switch (num) {
+    case 1:
+        gotoxy(start_x + 4, start_y + 2);
+        printf("●");
+        break;
+    case 2:
+        gotoxy(start_x + 2, start_y + 1);
+        printf("●");
+        gotoxy(start_x + 6, start_y + 3);
+        printf("●");
+        break;
+    case 3:
+        gotoxy(start_x + 2, start_y + 1);
+        printf("●");
+        gotoxy(start_x + 4, start_y + 2);
+        printf("●");
+        gotoxy(start_x + 6, start_y + 3);
+        printf("●");
+        break;
+    case 4:
+        gotoxy(start_x + 2, start_y + 1);
+        printf("●");
+        gotoxy(start_x + 6, start_y + 1);
+        printf("●");
+        gotoxy(start_x + 2, start_y + 3);
+        printf("●");
+        gotoxy(start_x + 6, start_y + 3);
+        printf("●");
+        break;
+    case 5:
+        gotoxy(start_x + 2, start_y + 1);
+        printf("●");
+        gotoxy(start_x + 6, start_y + 1);
+        printf("●");
+        gotoxy(start_x + 4, start_y + 2);
+        printf("●");
+        gotoxy(start_x + 2, start_y + 3);
+        printf("●");
+        gotoxy(start_x + 6, start_y + 3);
+        printf("●");
+        break;
+    case 6:
+        gotoxy(start_x + 2, start_y + 1);
+        printf("●");
+        gotoxy(start_x + 6, start_y + 1);
+        printf("●");
+        gotoxy(start_x + 2, start_y + 2);
+        printf("●");
+        gotoxy(start_x + 6, start_y + 2);
+        printf("●");
+        gotoxy(start_x + 2, start_y + 3);
+        printf("●");
+        gotoxy(start_x + 6, start_y + 3);
+        printf("●");
+        break;
+    }
 }
+
+// 주사위 굴리기 함수
+int roll_dice() {
+    srand(time(NULL));
+
+    // 첫 번째 주사위
+    int dice1 = rand() % 6 + 1;
+    draw_dice(dice1, 0);  // 왼쪽에 그리기
+
+    // 잠시 대기
+    Sleep(500);
+
+    // 두 번째 주사위
+    int dice2 = rand() % 6 + 1;
+    draw_dice(dice2, 1);  // 오른쪽에 그리기
+
+    // 주사위 합계 표시
+    gotoxy(45, 34);
+    return dice1 + dice2;
+}
+
 void message(int x, int y, char text[60]) {
     gotoxy(x, y);
     puts(text);
+}
+
+
+void land_info(struct player* player) {
+    int pos = player->position;
+    char names[40][40] = { "출발", "1", "황금열쇠", "1","1","1","1", "황금열쇠", "1","1", "무인도", "1", "황금열쇠", "1","1","1","1", "황금열쇠", "1","1", "사회복지기금 수령처", "1", "황금열쇠", "1","1","1","1","1","1","1","우주여행", "1","1","1","1", "황금열쇠", "1","1", "사회복지기금", "1" };
+
+    gotoxy(140, 32);
+    printf("현재 위치: ");
+
+    if (strcmp(names[pos], "1") == 0) {
+        // 일반 땅인 경우
+        int deed_index = 0;
+        for (int i = 0; i < pos; i++) {
+            if (strcmp(names[i], "1") == 0) {
+                deed_index++;
+            }
+        }
+
+        printf("%s", Deeds[deed_index].name);
+        gotoxy(140, 33);
+        printf("토지가격: %d원", Deeds[deed_index].price[0]);
+        gotoxy(140, 34);
+        if (Deeds[deed_index].ownerNum == -1) {
+            printf("소유자: 없음");
+        }
+        else {
+            printf("소유자: Player%d", Deeds[deed_index].ownerNum + 1);
+        }
+        gotoxy(140, 35);
+        printf("건물 레벨: %d", Deeds[deed_index].buildingLevel);
+    }
+    else {
+        // 특수 칸인 경우
+        printf("%s", names[pos]);
+        if (strcmp(names[pos], "황금열쇠") == 0) {
+            gotoxy(140, 33);
+            printf("황금열쇠를 뽑습니다.");
+        }
+    }
+}
+
+void my_turn(struct player* player) {
+    char key;
+    int dice_value;
+
+    while (1) {
+        message(140, 31, "땅 정보[Space] | 주사위 굴리기[k]");
+        key = _getch();
+
+        if (key == ' ') {  // 스페이스바
+            system("cls");
+            draw_board();
+            land_info(player);
+        }
+        else if (key == 'k') {  // k키
+            gotoxy(140, 31);
+            printf("                                     ");  // 이전 메시지 지우기
+
+            dice_value = roll_dice();
+            gotoxy(35, 26);
+            printf("주사위 값: %d", dice_value);
+
+            // 말 이동
+            player->position = (player->position + dice_value) % 40;
+            break;
+        }
+        else {
+            message(140, 32, "올바르지 않은 키입니다!");
+            Sleep(1000);
+            gotoxy(140, 32);
+            printf("                          ");  // 에러 메시지 지우기
+        }
+    }
 }
 
 void game_start() {
     srand(time(NULL));
     system("cls");
     int player_cnt;
-    int curr_turn = 0;
     char key;
-    int curr_arrow_pos = 0;
 
-    Sleep(10);
     init_deeds();
-    char names[40][40] = { "출발      <---", "1", "황금열쇠", "1","1","1","1", "황금열쇠", "1","1", "무인도", "1", "황금열쇠", "1","1","1","1", "황금열쇠", "1","1", "사회복지기금 수령처", "1", "황금열쇠", "1","1","1","1","1","1","1","우주여행", "1","1","1","1", "황금열쇠", "1","1", "사회복지기금", "1" };
-
     draw_board();
 
-    ////////////player_cnt에  몇 명 참가했는지 서버에서 받기
-    message(140, 30, "몇명이서 왔어?");
-    message(140, 31, "[2] [3] [4]");
-    while (1) {
-        key = _getch();
-        player_cnt = key - 48;
-        if (!(player_cnt >= 2 && player_cnt <= 4)) {
-            message(140, 32, "올바르지 않음!");
-        }
-        else {
-            printf("%d", player_cnt);
-            break;
-        }
-    }
-    /////////////////////////////
 
-    struct player * Players = init_players(player_cnt);
+    player_cnt = 2;
+    // 플레이어 초기화
+    init_players(player_cnt);
+
+    // 주사위 굴려서 턴 순서 정하기
+    int dice_values[4] = { 0 };  // 각 플레이어의 주사위 값 저장
+    int turn_order[4] = { 0, 1, 2, 3 };  // 턴 순서 저장
 
     system("cls");
     draw_board();
 
-    int my_color = 0; // 0 : 빨 | 1 : 파 | 2: 초 | 3 : 노
-    int dice1, dice2;
-
-    while (1) {
-        if (curr_turn == my_color) {
-            message(140, 30, "주사위 굴리기 [k]");
-            key = _getch();
-            if (key == 'k') {
-                dice1 = roll_dice(); // 주사위 굴린 후 제일 큰 숫자가 첫번째 턴
-                                    // 정보 보내면 됨
-                dice2 = roll_dice();
-                gotoxy(35, 26);
-                printf("%d %d", dice1, dice2);
-
-                break;
-            }
-            else {
-                message(140, 32, "올바르지 않은 키");
-            }
-        }
-        else {
-            message(140, 30, "자신의 턴이 올 때 까지 기다려주세요");
-        }
-    }
-    
-
-    /*
-    *
-    * 턴이 다 결정 되면 각 턴에 따라서 주사위 굴리기
-    * 
-    * 서버에서 턴이 바뀐걸 보내주면, 자기 번호랑 체크해서 일치하면 주사위 굴리게 하고, 아니면 기다리게하기
-    */
-
-    //system("cls");
-    //draw_board();
-
-    curr_turn = 0;
-
-    while (1) {
-        
+    // 각 플레이어가 주사위 굴리기
+    for (int i = 0; i < player_cnt; i++) {
         gotoxy(140, 30);
-        printf("현재 Player%d님의 차례입니다.", curr_turn);
-        if (GetAsyncKeyState(VK_LEFT)) {
-            if (0 <= curr_arrow_pos && curr_arrow_pos <= 9) {
-                curr_arrow_pos += 1;
-            }
-            draw_board();
-        }
+        printf("Player%d 주사위 굴리기 [k]", i + 1);
 
-
-
-
-
-
-
-
-        if (curr_turn == my_color) {
-            message(140, 31, "주사위 굴리기 [k]");
+        while (1) {
             key = _getch();
             if (key == 'k') {
-                dice1 = roll_dice(); // 주사위 굴린 후 제일 큰 숫자가 첫번째 턴
-                dice2 = roll_dice();
-                // 정보 보내면 됨
+                dice_values[i] = roll_dice();
                 gotoxy(35, 26);
-                printf("%d %d", dice1, dice2);
-                
-                // 굴린 후에는 턴 변경
-                curr_turn += 1; // 임시
-                if (curr_turn == 4) curr_turn = 0;
-                // 
+                printf("Player%d의 주사위: %d", i + 1, dice_values[i]);
+                Sleep(1000);  // 잠시 대기
                 break;
             }
-            else {
-                message(140, 32, "올바르지 않은 키");
-            }
         }
-        else {
-            message(140, 30, "자신의 턴이 올 때 까지 기다려주세요");
-        }
-
-        
+        system("cls");
+        draw_board();
     }
 
-    
-    
-    
-    /*
-    while (1) {
-        struct Player* current = &Players[turn];
-        printf("\n%s의 차례입니다.\n", current->name);
+    // 주사위 값에 따라 턴 순서 정렬 (버블 정렬)
+    for (int i = 0; i < player_cnt - 1; i++) {
+        for (int j = 0; j < player_cnt - 1 - i; j++) {
+            if (dice_values[j] < dice_values[j + 1]) {
+                // 주사위 값 교환
+                int temp = dice_values[j];
+                dice_values[j] = dice_values[j + 1];
+                dice_values[j + 1] = temp;
 
-        int dice = roll_dice();
-        printf("주사위를 굴려 %d가 나왔습니다!\n", dice);
-
-        current->position = (current->position + dice) % 1000;
-        struct deed* currentLand = &Deeds[current->position];
-        printf("%s가 %s에 도착했습니다.\n", current->name, currentLand->name);
-
-        if (currentLand->ownerNum == -1) {
-            printf("%s를 구매하시겠습니까? (1: 예, 0: 아니오): ", currentLand->name);
-            int choice;
-            scanf("%d", &choice);
-            if (choice == 1) {
-                buy_land(current, currentLand);
+                // 턴 순서 교환
+                temp = turn_order[j];
+                turn_order[j] = turn_order[j + 1];
+                turn_order[j + 1] = temp;
             }
         }
-        else {
-            pay_toll(current, currentLand);
-        }
+    }
 
-        if (current->money <= 0) {
-            printf("%s가 파산했습니다! 게임 종료.\n", current->name);
-            break;
-        }
+    // 턴 순서 출력
+    message(140, 30, "턴 순서가 정해졌습니다!");
+    for (int i = 0; i < player_cnt; i++) {
+        gotoxy(140, 32 + i);
+        printf("%d번째 턴: Player%d (주사위:%d)", i + 1, turn_order[i] + 1, dice_values[i]);
+    }
+    Sleep(3000);  // 3초 대기
 
-        turn = (turn + 1) % 4;
-    }*/
+    // 게임 시작
+    int current_turn = 0;
+    while (1) {
+        system("cls");
+        draw_board();
 
-    gotoxy(60, 60);
+        int current_player = turn_order[current_turn];
+        gotoxy(140, 30);
+        printf("Player%d의 턴입니다.", current_player + 1);
+
+        my_turn(&Players[current_player]);
+
+        current_turn = (current_turn + 1) % player_cnt;  // 다음 턴으로
+        Sleep(1000);  // 1초 대기
+    }
 }
+
 void set_fullscreen() {
     system("mode con: cols=1000 lines=80");  // 윈도우 cmd 창 크기를 설정 (전체화면처럼 보이게)
 }
