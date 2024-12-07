@@ -8,6 +8,9 @@
 #include <time.h>
 #include <conio.h>
 
+#define _CRT_SECURE_NO_WARNINGS
+#pragma warning(disable:4996)
+
 #define RED 12
 #define BLUE 9
 #define GREEN 10
@@ -20,34 +23,64 @@
 #define STATE_LOBBY 0
 #define STATE_IN_GAME 1
 
-// 구조체 정의
-struct deed {
-    char name[40];      // 토지 이름
-    int areaNum;        // 빨초노검 구역
-    int ownerNum;       // 0: 없음
-    int buildingLevel;  // 건물 레벨
-    int price[5];       // 대지, 별장1, 별장2, 빌딩, 호텔 가격
-    int toll[5];        // 통행료
-    int isCanBuild;     // 건설 가능 여부
-};
+// 게임 상수 추가
+#define INDIA_POSITION 15  // 인도 위치
+#define SALARY_AMOUNT 200000  // 월급
 
+// Define complete Deed structure at the beginning
+typedef struct {
+    char name[50];
+    int price;
+    int baseRent;
+    int ownerNum;
+    int buildingLevel;
+    int isCanBuild;
+} Deed;
+
+// Forward declare struct player
+struct player;
+
+// Define complete player structure
 struct player {
-    int color;          // 플레이어 색상
-    int position;       // 현재 위치
-    int money;          // 현재 보유 금액
-    char name[20];      // 플레이어 이름
-    int isActive;       // 활성화 상태
+    int color;
+    int position;
+    int money;
+    int laps;
+    char name[20];
+    int isActive;
 };
 
-// 전역 변수
-struct deed Deeds[29];
-struct player Players[4];
+// Define GameRoom structure
+typedef struct {
+    char name[50];
+    struct player players[2];
+    int numPlayers;
+    int currentTurn;
+    int isGameStarted;
+    int properties[32];
+    int roundCount;
+} GameRoom;
+
+// Global variables
+Deed Deeds[32];  // 전역 Deeds 배열 추가
+struct player Players[2];  // Changed to 2 players only
 SOCKET clientSocket;
 CRITICAL_SECTION printLock;
 int gameState = STATE_LOBBY;
 int myPlayerNum = -1;
 int playerCount = 0;
 int currentTurn = -1;
+int roundCount = 1;     // Track current round
+int gamePhase = 0;  // 추가: 게임 진행 단계
+int waitingForPurchase = 0;
+int canBuyPosition = -1;
+int lastPurchasePosition = -1;  // Track last purchased position
+int currentPosition = -1;  // Track current player's position
+int lastDiceRoll = 0;  // Track when dice was last rolled
+int diceRollInProgress = 0;
+char currentPropertyName[50] = {0};
+int currentPlayerPos = -1;  // Track current player's actual position
+int turnChangeInProgress = 0;  // Track turn change state
 
 // 함수 선언
 void textColor(int colorNum);
@@ -62,6 +95,9 @@ void draw_player_markers();
 DWORD WINAPI receive_thread(LPVOID arg);
 void printInCell(int x, int y, char* text, int price);
 void game_loop();
+void handle_toll(GameRoom* room, int position);
+void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum);
+void handle_build(GameRoom* room, int playerNum, int position);
 
 // 텍스트 색상 변경 함수
 void textColor(int colorNum) {
@@ -154,10 +190,8 @@ void init_deeds() {
         strncpy(Deeds[i].name, names[i], sizeof(Deeds[i].name));
         Deeds[i].ownerNum = -1;
         Deeds[i].buildingLevel = 0;
-        for (int j = 0; j < 5; j++) {
-            Deeds[i].price[j] = prices[i][j];
-            Deeds[i].toll[j] = tolls[i][j];
-        }
+        Deeds[i].price = prices[i][0];  // Base price
+        Deeds[i].baseRent = tolls[i][0]; // Base rent
         Deeds[i].isCanBuild = (prices[i][1] > 0); // 별장1 가격이 0보다 크면 건설 가능
     }
 }
@@ -166,12 +200,14 @@ void init_deeds() {
 void init_players(int player_cnt) {
     int colors[4] = {RED, BLUE, GREEN, YELLOW};
     playerCount = player_cnt;
+    int initialMoney = (player_cnt <= 2) ? 6000000 : 3000000;
 
     for (int i = 0; i < player_cnt; i++) {
         Players[i].color = colors[i];
         Players[i].position = 0;
-        Players[i].money = 3000000;
+        Players[i].money = initialMoney;
         Players[i].isActive = 1;
+        Players[i].laps = 0;
         sprintf(Players[i].name, "Player %d", i + 1);
     }
 }
@@ -182,13 +218,13 @@ void draw_dice_board(int dice1, int dice2) {
 
     // 주사위 1
     gotoxy(x, y);
-    printf("┌─────┐");
+    printf("┌??────┐");
     gotoxy(x, y + 1);
     printf("│  %d  │", dice1);
     gotoxy(x, y + 2);
     printf("└─────┘");
 
-    // 주사위 2
+    // 주???위 2
     gotoxy(x + 15, y);
     printf("┌─────┐");
     gotoxy(x + 15, y + 1);
@@ -201,7 +237,9 @@ void draw_dice_board(int dice1, int dice2) {
     printf("합계: %d", dice1 + dice2);
 }
 
+// 게임 ??보 표시 함수 수정
 void show_game_info() {
+    // Remove duplicate game info display
     gotoxy(140, 3);
     printf("나의 번호: 플레이어 %d", myPlayerNum + 1);
 
@@ -209,22 +247,25 @@ void show_game_info() {
     printf("┌─ 게임 정보 ─┐");
     gotoxy(140, 6);
     printf("현재 턴: 플레이어 %d", currentTurn + 1);
+    gotoxy(140, 7);
+    printf("현재 라운드: %d", roundCount);
 
-    for (int i = 0; i < playerCount; i++) {
-        gotoxy(140, 8 + i);
+    for (int i = 0; i < 2; i++) {  // Only show 2 players
+        gotoxy(140, 9 + i);
         textColor(Players[i].color);
-        printf("플레이어 %d: %d원", i + 1, Players[i].money);
+        printf("플레이어 %d: %d원 (%d바퀴)", i + 1, Players[i].money, Players[i].laps);
         textColor(15);
     }
 
-    gotoxy(140, 12);
-    printf("┌─ 조작법 ─┐");
-    gotoxy(140, 13);
-    printf("SPACE: 주사위 굴리기");
+    // Show controls only once
     gotoxy(140, 14);
-    printf("B: 건물 건설");
+    printf("┌─ 조작법 ─┐");
     gotoxy(140, 15);
-    printf("T: 턴 넘기기");
+    printf("SPACE: 주사위 굴리기");
+    gotoxy(140, 16);
+    printf("Y: 땅 구매");
+    gotoxy(140, 17);
+    printf("N: 구매 건너뛰기");
 }
 
 // 말 그리기 함수 수정
@@ -311,6 +352,18 @@ void printInCell(int x, int y, char* text, int price) {
         gotoxy(x, y + 3);
         printf("%d원", price);
     }
+
+    // Draw ownership marker if property is owned
+    for (int i = 0; i < 32; i++) {
+        if (strcmp(Deeds[i].name, text) == 0 && Deeds[i].ownerNum != -1) {
+            gotoxy(x + 8, y + 3);  // Position for ownership marker
+            textColor(Players[Deeds[i].ownerNum].color);
+            printf("■");  // Ownership marker
+            textColor(15);
+            break;
+        }
+    }
+
     textColor(15);
 }
 
@@ -326,22 +379,49 @@ void draw_player_marker(int playerNum, int x, int y) {
 void handle_network_message(char* message) {
     char command[32];
     char rest[BUFFER_SIZE];
-    sscanf(message, "%[^:]:%s", command, rest);
+    char* payload;
+
+    payload = strchr(message, ':');
+    if (payload) {
+        int cmdLen = payload - message;
+        strncpy(command, message, cmdLen);
+        command[cmdLen] = '\0';
+        payload++; // ':' 다음으로 이동
+    } else {
+        strcpy(command, message);
+        payload = "";
+    }
 
     EnterCriticalSection(&printLock);
 
     if (strcmp(command, "DICE") == 0) {
         int dice1, dice2;
-        sscanf(rest, "%d,%d", &dice1, &dice2);
-        draw_dice_board(dice1, dice2);
-        // 1초 대기
-        Sleep(1000);
+        if (sscanf(payload, "%d,%d", &dice1, &dice2) == 2) {
+            diceRollInProgress = 1;  // Mark dice roll as in progress
+            system("cls");  // 화면 초기화
+            draw_board();   // 보드 다시 그리기
+            draw_dice_board(dice1, dice2);  // 주사위 표시
+            show_game_info();  // 정보 업데이트
+            gotoxy(0, 57);
+            printf("주사위 결과: %d + %d = %d", dice1, dice2, dice1 + dice2);
+        }
     }
     else if (strcmp(command, "CAN_BUY") == 0) {
-        int position;
-        sscanf(rest, "%d", &position);
-        gotoxy(0, 57);
-        printf("이 땅을 구매하시겠습니까? (Y/N) - 가격: %d원", Deeds[position].price[0]);
+        int position, price;
+        char propertyName[50];
+        if (sscanf(payload, "%d,%d,%[^\n]", &position, &price, propertyName) == 3) {
+            if (currentTurn == myPlayerNum) {
+                waitingForPurchase = 1;
+                canBuyPosition = position;
+                currentPosition = position;  // Update current position
+
+                // Clear previous message and show purchase prompt
+                gotoxy(0, 57);
+                printf("                                                                              ");
+                gotoxy(0, 57);
+                printf("%s 땅을 구매하시겠습니까? (Y/N) - 가격: %d원", propertyName, price);
+            }
+        }
     }
     else if (strcmp(command, "BUILD_SUCCESS") == 0) {
         int position, level, money;
@@ -361,43 +441,136 @@ void handle_network_message(char* message) {
     }
     else if (strcmp(command, "MOVE") == 0) {
         int playerNum, newPos;
-        sscanf(rest, "%d,%d", &playerNum, &newPos);
-        Players[playerNum].position = newPos;
+        if (sscanf(payload, "%d,%d", &playerNum, &newPos) == 2) {
+            Players[playerNum].position = newPos;
+            if (playerNum == myPlayerNum) {
+                currentPlayerPos = newPos;  // Update current player position
+            }
+            diceRollInProgress = 0;  // Clear dice roll state
+            system("cls");
+            draw_board();
+            draw_player_markers();
+            show_game_info();
+        }
+    }
+    else if (strcmp(command, "TURN") == 0) {
+        int newTurn, position;
+        sscanf(payload, "%d,%d", &newTurn, &position);
+        currentTurn = newTurn;
+        lastDiceRoll = 0;  // Reset dice roll state for new turn
+        waitingForPurchase = 0;  // Reset purchase state
+        canBuyPosition = -1;     // Reset buy position
+        turnChangeInProgress = 0;
+
+        // Refresh screen
+        system("cls");
+        draw_board();
+        draw_player_markers();
+        show_game_info();
+
+        // Show turn message
+        gotoxy(0, 56);
+        if (currentTurn == myPlayerNum) {
+            printf("당신의 차례입니다. 스페이스바를 눌러 주사위를 굴리세요.\n");
+        } else {
+            printf("플레이어 %d의 차례입니다.\n", currentTurn + 1);
+            // Clear any remaining prompts
+            gotoxy(0, 57);
+            printf("                                                                              ");
+        }
+    }
+    else if (strcmp(command, "PLAYER_NUM") == 0) {
+        int playerNum;
+        sscanf(payload, "%d", &playerNum);  // Changed from rest to payload
+        myPlayerNum = playerNum;
+        if (myPlayerNum >= 0 && myPlayerNum < 2) {  // Add validation
+            gotoxy(0, 55);
+            printf("당신은 플레이어 %d입니다.\n", myPlayerNum + 1);
+        } else {
+            // Handle invalid player number
+            printf("Error: Invalid player number received (%d)\n", myPlayerNum);
+            exit(1);
+        }
+    }
+    else if (strcmp(command, "CREATED") == 0) {
+        gotoxy(0, 55);
+        printf("방이 생성되었습니다. 다른 플레이어를 기다리는 중...\n");
+        // 방 생성 성공 시 추가 처리
+        gameState = STATE_LOBBY;  // 로비 상태 ???지
+    }
+    else if (strcmp(command, "JOIN_FAILED") == 0) {
+        gotoxy(0, 55);
+        printf("방 입장에 실패했습니다. 방 ???름을 확인해주세요.\n");
+        Sleep(2000);
+        system("cls");
+        gameState = STATE_LOBBY;  // 로비 상태로 복귀
+    }
+    else if (strcmp(command, "GAME_START") == 0) {
+        gameState = STATE_IN_GAME;
         system("cls");
         draw_board();
         show_game_info();
     }
-    else if (strcmp(command, "TURN") == 0) {
-        sscanf(rest, "%d", &currentTurn);
+    else if (strcmp(command, "PHASE_CHANGE") == 0) {
+        gamePhase = atoi(rest);
+        gotoxy(0, 57);
+        if (gamePhase == 1) {
+            printf("후반전이 시작되었습니다! 이제 건물을 지을 수 있습니다.");
+        }
+        Sleep(2000);
+        system("cls");
+        draw_board();
+        show_game_info();
+    }
+    else if (strcmp(command, "ROUND") == 0) {
+        roundCount = atoi(payload);
+        gotoxy(0, 57);
+        printf("새로운 라운드가 시작되었습니다! (라운드 %d)", roundCount);
+        Sleep(1000);
+        system("cls");
+        draw_board();
+        show_game_info();
+    }
+    else if (strcmp(command, "FORCE_MOVE") == 0) {
+        int playerNum, newPos;
+        sscanf(payload, "%d,%d", &playerNum, &newPos);
+        Players[playerNum].position = newPos;
+        gotoxy(0, 57);
+        printf("플레이어 %d가 너무 앞서나가서 인도로 이동되었습니다!", playerNum + 1);
+        Sleep(1000);
+        system("cls");
+        draw_board();
+        show_game_info();
+    }
+    else if (strcmp(command, "PURCHASE_SUCCESS") == 0) {
+        int position, playerNum, money;
+        sscanf(payload, "%d,%d,%d", &position, &playerNum, &money);
+        Players[playerNum].money = money;
+        Deeds[position].ownerNum = playerNum;  // Update ownership
+
+        // Clear purchase prompt and update screen
+        gotoxy(0, 57);
+        printf("                                                                              ");
+        system("cls");
+        draw_board();
+        draw_player_markers();
+        show_game_info();
+
+        // Show turn message
         gotoxy(0, 56);
         if (currentTurn == myPlayerNum) {
             printf("당신의 차례입니다. 스페이스바를 눌러 주사위를 굴리세요.\n");
         } else {
             printf("플레이어 %d의 차례입니다.\n", currentTurn + 1);
         }
-        show_game_info();
     }
-    else if (strcmp(command, "PLAYER_NUM") == 0) {
-        int playerNum;
-        sscanf(rest, "%d", &playerNum);
-        myPlayerNum = playerNum;
-        gotoxy(0, 55);
-        printf("당신은 플레이어 %d입니다.\n", myPlayerNum + 1);
-    }
-    else if (strcmp(command, "CREATED") == 0) {
-        gotoxy(0, 55);
-        printf("방이 생성되었습니다. 다른 플레이어를 기다리는 중...\n");
-    }
-    else if (strcmp(command, "JOIN_FAILED") == 0) {
-        gotoxy(0, 55);
-        printf("방 입장에 실패했습니다. 방 이름을 확인해주세요.\n");
-        Sleep(2000);
-        system("cls");
-    }
-    else if (strcmp(command, "GAME_START") == 0) {
-        gameState = STATE_IN_GAME;
+    else if (strcmp(command, "SKIP_PURCHASE") == 0) {
+        // Clear purchase prompt
+        gotoxy(0, 57);
+        printf("                                                                              ");
         system("cls");
         draw_board();
+        draw_player_markers();
         show_game_info();
     }
     LeaveCriticalSection(&printLock);
@@ -406,19 +579,25 @@ void handle_network_message(char* message) {
 // 수신 스레드 함수
 DWORD WINAPI receive_thread(LPVOID arg) {
     char buffer[BUFFER_SIZE];
-    int bytesReceived;
 
-    while ((bytesReceived = recv(clientSocket, buffer, BUFFER_SIZE - 1, 0)) > 0) {
+    while (1) {
+        memset(buffer, 0, BUFFER_SIZE);
+        int bytesReceived = recv(clientSocket, buffer, BUFFER_SIZE - 1, 0);
+        if (bytesReceived <= 0) {
+            break;
+        }
         buffer[bytesReceived] = '\0';
         handle_network_message(buffer);
     }
-
     return 0;
 }
 
 // 게임판 그리기 함수
 void draw_board() {
-    //맨 윗라인
+    system("cls");  // 화면 초기화
+
+    // 보드 프레임 그리기
+    //?? 윗라인
     gotoxy(0, 0);
     puts("┌──────────┬──────────┬──────────┬──────────┬──────────┬──────────┬──────────┬──────────┬──────────┬──────────┬──────────┐");
     for (int i = 0; i < 4; i++) {
@@ -427,12 +606,12 @@ void draw_board() {
         }
         puts("│");
     }
-    puts("├──────────┼──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┼──────────┤");
+    puts("├──??───────┼──────────┴──────────┴─??────────┴──────────┴──────────┴──────────┴──────────??──────────┴──────────┼──────────┤");
 
     // 중간 라인
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 4; j++) {
-            puts("│          │                                                                                                  │          │");
+            puts("│          │                                                                                                  ???          │");
         }
         puts("├──────────┤                                                                                                  ├──────────┤");
     }
@@ -449,22 +628,22 @@ void draw_board() {
         }
         puts("│");
     }
-    puts("└──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴───??──────┴──────────┴──────────┴──────────┴──────────┘");
+    puts("└──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┘");
 
     // 블루마블 타이틀 그리기
     char title_art[12][150] = {
         "  ■■     ■■    ■■■■■■■■            ■    ■      ■  ",
-        "  ■■     ■■          ■■    ■■■■■■  ■    ■■■■■■■■  ",
+        "  ■■     ■■          ■■    ■■■■■■  ■    ■■???■■■■■  ",
         "  ■■■■■■■■■    ■■■■■■■■    ■    ■  ■    ■      ■  ",
         "  ■■     ■■    ■■          ■    ■  ■    ■■■■■■■■  ",
         "  ■■■■■■■■■    ■■          ■    ■  ■■■■            ",
         "               ■■■■■■■■■   ■    ■  ■■■■■■■■■■■■■■■",
         "                           ■    ■  ■       ■■      ",
-        "■■■■■■■■■■■■■■■■■■■■■■■■■  ■    ■  ■    ■■■■■■■■  ",
+        "■■■??■■■■■■■???■■■■■■■■■■■■■  ■    ■  ■    ■■■■■■■■  ",
         "      ■■          ■■       ■■■■■■  ■           ■  ",
         "      ■■          ■■               ■    ■■■■■■■■  ",
         "      ■■          ■■               ■    ■          ",
-        "      ■■          ■■               ■    ■■■■■■■■■ "
+        "      ■■          ■■               ■    ■■■■■???■■■ "
     };
 
     int title_x = 37, title_y = 10;
@@ -498,11 +677,11 @@ void draw_board() {
 
     // 황금열쇠 그리기
     char key_art[7][100] = {
-        "┌────────────────────────────┐",
+        "┌──────────────??─────────────┐",
         "│  .---.                     │",
         "│ /    |\\________________    │",
         "│ | ()  | ________   _   _)  │",
-        "│ \\    |/        | | | |     │",
+        "│ \\    |/        | | | |     ???",
         "│  `---'         \" - \" |_|   │",
         "└────────────────────────────┘"
     };
@@ -513,9 +692,9 @@ void draw_board() {
         puts(key_art[i]);
     }
 
-    // 땅 정보 표시 (각 칸에 도시 이름과 가격 출력)
+    // 땅 정보 표시 (각 칸에 도시 이름??? 가격 출력)
     char names[40][40] = {
-        "출발      ", "1", "황금열쇠", "1", "1", "1", "1", "황금열쇠", "1", "1",
+        "출발      ", "1", "황금열쇠", "1", "1", "1", "1", "황금??쇠", "1", "1",
         "무인도    ", "1", "황금열쇠", "1", "1", "1", "1", "황금열쇠", "1", "1",
         "사회복지기금", "1", "황금열쇠", "1", "1", "1", "1", "1", "1", "1",
         "우주여행  ", "1", "1", "1", "1", "황금열쇠", "1", "1", "사회복지기금", "1"
@@ -527,7 +706,7 @@ void draw_board() {
     // 아래쪽 행 출력 (좌->우)
     for (int i = 0; i < 10; i++) {
         if (strcmp(names[i], "1") == 0) {
-            printInCell(curr_x, curr_y, Deeds[cnt].name, Deeds[cnt].price[0]);
+            printInCell(curr_x, curr_y, Deeds[cnt].name, Deeds[cnt].price);
             if (Deeds[cnt].ownerNum >= 0) {
                 gotoxy(curr_x + 8, curr_y + 3);
                 textColor(Players[Deeds[cnt].ownerNum].color);
@@ -541,10 +720,10 @@ void draw_board() {
         curr_x -= 11;
     }
 
-    // 왼쪽 열 출력 (아래->위)
+    // 왼쪽 열 ???력 (아래->위)
     for (int i = 10; i < 20; i++) {
         if (strcmp(names[i], "1") == 0) {
-            printInCell(curr_x, curr_y, Deeds[cnt].name, Deeds[cnt].price[0]);
+            printInCell(curr_x, curr_y, Deeds[cnt].name, Deeds[cnt].price);
             if (Deeds[cnt].ownerNum >= 0) {
                 gotoxy(curr_x + 8, curr_y + 3);
                 textColor(Players[Deeds[cnt].ownerNum].color);
@@ -561,7 +740,7 @@ void draw_board() {
     // 위쪽 행 출력 (좌->우)
     for (int i = 20; i < 30; i++) {
         if (strcmp(names[i], "1") == 0) {
-            printInCell(curr_x, curr_y, Deeds[cnt].name, Deeds[cnt].price[0]);
+            printInCell(curr_x, curr_y, Deeds[cnt].name, Deeds[cnt].price);
             if (Deeds[cnt].ownerNum >= 0) {
                 gotoxy(curr_x + 8, curr_y + 3);
                 textColor(Players[Deeds[cnt].ownerNum].color);
@@ -578,7 +757,7 @@ void draw_board() {
     // 오른쪽 열 출력 (위->아래)
     for (int i = 30; i < 40; i++) {
         if (strcmp(names[i], "1") == 0) {
-            printInCell(curr_x, curr_y, Deeds[cnt].name, Deeds[cnt].price[0]);
+            printInCell(curr_x, curr_y, Deeds[cnt].name, Deeds[cnt].price);
             if (Deeds[cnt].ownerNum >= 0) {
                 gotoxy(curr_x + 8, curr_y + 3);
                 textColor(Players[Deeds[cnt].ownerNum].color);
@@ -645,44 +824,66 @@ void draw_board() {
         }
     }
 }
-// 게임 루프 함수
+// 게임 루프 함수 수정
 void game_loop() {
-    char input;
+    char buffer[BUFFER_SIZE];
 
     while (1) {
         if (gameState == STATE_IN_GAME && currentTurn == myPlayerNum) {
             if (_kbhit()) {
-                input = _getch();
-                if (input == ' ') {
+                char input = _getch();
+
+                if (waitingForPurchase) {
+                    switch(input) {
+                        case 'y':
+                        case 'Y':
+                            sprintf(buffer, "BUY:%d", currentPosition);  // Use current position
+                            send_network_message(buffer);
+                            waitingForPurchase = 0;
+                            canBuyPosition = -1;
+                            // Clear purchase prompt
+                            gotoxy(0, 57);
+                            printf("                                                                              ");
+                            break;
+                        case 'n':
+                        case 'N':
+                            if (!turnChangeInProgress) {
+                                send_network_message("SKIP_PURCHASE");
+                                waitingForPurchase = 0;
+                                turnChangeInProgress = 1;
+                            }
+                            break;
+                    }
+                }
+                else if (input == ' ' && !diceRollInProgress && !lastDiceRoll) {
+                    diceRollInProgress = 1;
+                    lastDiceRoll = 1;
+                    gotoxy(0, 57);
+                    printf("주사위를 굴립니다...");
                     int dice1 = (rand() % 6) + 1;
                     int dice2 = (rand() % 6) + 1;
-
-                    char message[BUFFER_SIZE];
-                    sprintf(message, "ROLL:%d,%d", dice1, dice2);
-                    send(clientSocket, message, strlen(message), 0);
-                    Sleep(500);
-                }
-                else if (input == 'b' || input == 'B') {
-                    gotoxy(0, 57);
-                    printf("건물을 건설할 위치를 입력하세요 (0-31): ");
-                    int position;
-                    scanf("%d", &position);
-
-                    char message[BUFFER_SIZE];
-                    sprintf(message, "BUILD:%d", position);
-                    send(clientSocket, message, strlen(message), 0);
-                }
-                else if (input == 'y' || input == 'Y') {
-                    char message[BUFFER_SIZE];
-                    sprintf(message, "BUY:%d", Players[myPlayerNum].position);
-                    send(clientSocket, message, strlen(message), 0);
+                    printf("DEBUG: 주사위 결과 - %d, %d\n", dice1, dice2);
+                    sprintf(buffer, "ROLL:%d,%d", dice1, dice2);
+                    send_network_message(buffer);
                 }
             }
         }
-        Sleep(50);  // CPU 사용률 감소
+
+        // Check for network messages
+        int bytes = recv(clientSocket, buffer, BUFFER_SIZE - 1, MSG_PEEK);
+        if (bytes > 0) {
+            bytes = recv(clientSocket, buffer, BUFFER_SIZE - 1, 0);
+            if (bytes > 0) {
+                buffer[bytes] = '\0';
+                handle_network_message(buffer);
+            }
+        }
+
+        Sleep(50);  // Add small delay to prevent CPU overuse
     }
 }
 
+// game_start 함수에서 초기화 부분 수정
 void game_start() {
     srand((unsigned int)time(NULL));
 
@@ -716,42 +917,76 @@ void game_start() {
 
     printf("서버에 연결되었습니다!\n");
 
-    // 필요한 초기화 수행
+    // 초기화 순서 변경
     init_deeds();
     init_players(2);
 
+    // 버퍼링 모드 변경
+    unsigned long mode = 1;
+    ioctlsocket(clientSocket, FIONBIO, &mode);
+
     // 수신 스레드 생성
-    CreateThread(NULL, 0, receive_thread, NULL, 0, NULL);
+    HANDLE hThread = CreateThread(NULL, 0, receive_thread, NULL, 0, NULL);
+    if (hThread == NULL) {
+        printf("수신 스레드 생성 실패\n");
+        return;
+    }
+
+    // 비동기 모드 해제 (동기 모드로 설정)
+    mode = 0;
+    ioctlsocket(clientSocket, FIONBIO, &mode);
 
     // 로비 메뉴
-    while (gameState == STATE_LOBBY) {  // 게임 시작 전까지 반d복
-        printf("\n1. 방 만들기\n");
+    while (gameState == STATE_LOBBY) {
+        printf("\n=== 블루마블 게임 로비 ===\n");
+        printf("1. 방 만들기\n");
         printf("2. 방 입장하기\n");
-        printf("선택: ");
+        printf("???택: ");
 
         char choice = _getch();
         char roomName[50];
         char message[BUFFER_SIZE];
+        char response[BUFFER_SIZE];
 
-        system("cls");  // 화면 지우기
+        system("cls");
 
         if (choice == '1') {
-            printf("\n방 이??을 입력하세요: ");
+            printf("\n방 이름을 입력하세??: ");
             scanf("%s", roomName);
             sprintf(message, "CREATE %s", roomName);
-            send(clientSocket, message, strlen(message), 0);
-            printf("\n방을 생성하고 다른 플레이어를 기다리는 중...\n");
+            if (send(clientSocket, message, strlen(message), 0) > 0) {
+                printf("\n방을 생성하고 다른 플레이어를 기다리는 중...\n");
+
+                // 서버 응답 대기
+                int bytes = recv(clientSocket, response, BUFFER_SIZE - 1, 0);
+                if (bytes > 0) {
+                    response[bytes] = '\0';
+                    handle_network_message(response);
+                }
+            }
         }
         else if (choice == '2') {
             printf("\n방 이름을 입력하세요: ");
             scanf("%s", roomName);
             sprintf(message, "JOIN %s", roomName);
-            send(clientSocket, message, strlen(message), 0);
-            printf("\n방 입장을 시도하는 중...\n");
+            if (send(clientSocket, message, strlen(message), 0) > 0) {
+                printf("\n방 입장을 시도하는 중...\n");
+
+                // 서버 응답 대기
+                int bytes = recv(clientSocket, response, BUFFER_SIZE - 1, 0);
+                if (bytes > 0) {
+                    response[bytes] = '\0';
+                    handle_network_message(response);
+                }
+            }
         }
 
-        Sleep(100);  // 잠시 대기
+        Sleep(100);
     }
+
+    // 게임 시작 후 비동기 모드로 전환
+    mode = 1;
+    ioctlsocket(clientSocket, FIONBIO, &mode);
 
     // 게임이 시작되면 화면을 지우고 게임 보드 표시
     system("cls");
@@ -768,4 +1003,74 @@ int main() {
     game_start();
     DeleteCriticalSection(&printLock);
     return 0;
+}
+
+// 통행료 처리 함수 수정
+void handle_toll(GameRoom* room, int position) {
+    struct player* current = &room->players[room->currentTurn];
+    Deed* property = &Deeds[position];  // Changed to use Deed* instead of struct deed*
+    int owner = property->ownerNum;
+
+    if (owner != -1 && owner != room->currentTurn) {
+        int rent = property->baseRent * room->roundCount;  // Use baseRent instead of toll array
+        if (current->money >= rent) {
+            current->money -= rent;
+            room->players[owner].money += rent;
+            char msg[BUFFER_SIZE];
+            sprintf(msg, "TOLL:%d,%d,%d", room->currentTurn, owner, rent);
+            send(clientSocket, msg, strlen(msg), 0);
+        } else {
+            handle_bankruptcy(room, room->currentTurn, owner);
+        }
+    }
+}
+
+// 파산 처리 함수 수정
+void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum) {
+    struct player* bankrupt = &room->players[playerNum];
+    bankrupt->isActive = 0;
+
+    // 모든 소유 재산 이전
+    for (int i = 0; i < 29; i++) {
+        if (Deeds[i].ownerNum == playerNum) {
+            Deeds[i].ownerNum = creditorNum;
+            Deeds[i].buildingLevel = 0;  // ??물 초기화
+        }
+    }
+
+    char msg[BUFFER_SIZE];
+    sprintf(msg, "BANKRUPTCY:%d,%d", playerNum, creditorNum);
+    send(clientSocket, msg, strlen(msg), 0);
+}
+
+// 건물 건설 함수 수정
+void handle_build(GameRoom* room, int playerNum, int position) {
+    if (gamePhase == 0) {
+        char msg[BUFFER_SIZE];
+        sprintf(msg, "ERROR:전반전에는 건물을 지을 수 없습니다.");
+        send(clientSocket, msg, strlen(msg), 0);
+        return;
+    }
+
+    struct player* player = &room->players[playerNum];
+    Deed* property = &Deeds[position];  // Changed to use Deed* instead of struct deed*
+
+    if (property->ownerNum != playerNum || !property->isCanBuild) {
+        return;
+    }
+
+    int buildCost = property->price;  // Use base price for simplicity
+    if (player->money >= buildCost) {
+        player->money -= buildCost;
+        property->buildingLevel++;
+
+        char msg[BUFFER_SIZE];
+        sprintf(msg, "BUILD_SUCCESS:%d,%d,%d", position, property->buildingLevel, player->money);
+        send(clientSocket, msg, strlen(msg), 0);
+    }
+}
+
+// send_network_message 함수 추가
+void send_network_message(const char* message) {
+    send(clientSocket, message, strlen(message), 0);
 }

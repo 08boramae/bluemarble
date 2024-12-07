@@ -5,73 +5,76 @@
 #include <windows.h>
 #include <time.h>
 
+#define _CRT_SECURE_NO_WARNINGS
+#pragma warning(disable:4996)
+
 #pragma comment(lib, "ws2_32.lib")
 
-#define MAX_PLAYERS 4
+#define MAX_PLAYERS 2
 #define MAX_ROOMS 10
 #define BUFFER_SIZE 1024
 #define INITIAL_MONEY 3000000
+#define INDIA_POSITION 15
 
-// 땅 정보 구조체 수정
 typedef struct {
     char name[50];
-    int price[5];    // 땅값, 집1, 집2, 호텔, 빌딩 순
-    int toll[5];     // 통행료 정보 추가
+    int price;
+    int baseRent;
 } Deed;
 
+// Replace the Deeds array definition with corrected property sequence
 const Deed Deeds[32] = {
-    {"출발", {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}},
-    {"타이베이", {50000, 50000, 100000, 150000, 250000}, {2000, 10000, 30000, 90000, 250000}},
-    {"베이징", {80000, 50000, 100000, 150000, 250000}, {4000, 20000, 60000, 180000, 450000}},
-    {"마닐라", {80000, 50000, 100000, 150000, 250000}, {4000, 20000, 60000, 180000, 450000}},
-    {"제주도", {200000, 0, 0, 0, 0}, {300000, 0, 0, 0, 0}},
-    {"싱가포르", {100000, 50000, 100000, 150000, 250000}, {6000, 30000, 90000, 270000, 550000}},
-    {"카이로", {100000, 50000, 100000, 150000, 250000}, {6000, 30000, 90000, 270000, 550000}},
-    {"이스탄불", {120000, 50000, 100000, 150000, 250000}, {8000, 40000, 100000, 300000, 600000}},
-    {"아테네", {140000, 100000, 200000, 300000, 500000}, {10000, 50000, 150000, 450000, 750000}},
-    {"코펜하겐", {160000, 100000, 200000, 300000, 500000}, {12000, 60000, 180000, 500000, 900000}},
-    {"스톡홀름", {160000, 100000, 200000, 300000, 500000}, {12000, 60000, 180000, 500000, 900000}},
-    {"콩코드", {200000, 0, 0, 0, 0}, {300000, 0, 0, 0, 0}},
-    {"베른", {180000, 100000, 200000, 300000, 500000}, {14000, 70000, 200000, 550000, 950000}},
-    {"베를린", {180000, 100000, 200000, 300000, 500000}, {14000, 70000, 200000, 550000, 950000}},
-    {"오타와", {200000, 100000, 200000, 300000, 500000}, {16000, 80000, 220000, 600000, 1000000}},
-    {"부에노스", {220000, 150000, 300000, 450000, 750000}, {18000, 90000, 250000, 700000, 1050000}},
-    {"상파울루", {240000, 150000, 300000, 450000, 750000}, {20000, 100000, 300000, 750000, 1100000}},
-    {"시드니", {240000, 150000, 300000, 450000, 750000}, {20000, 100000, 300000, 750000, 1100000}},
-    {"부산", {500000, 0, 0, 0, 0}, {600000, 0, 0, 0, 0}},
-    {"하와이", {260000, 150000, 300000, 450000, 750000}, {22000, 110000, 330000, 800000, 1150000}},
-    {"리스본", {260000, 150000, 300000, 450000, 750000}, {22000, 110000, 330000, 800000, 1150000}},
-    {"퀸엘리자베스", {300000, 0, 0, 0, 0}, {250000, 0, 0, 0, 0}},
-    {"마드리드", {280000, 150000, 300000, 450000, 750000}, {24000, 120000, 360000, 850000, 1200000}},
-    {"도쿄", {300000, 200000, 400000, 600000, 1000000}, {26000, 130000, 390000, 900000, 1270000}},
-    {"컬럼비아", {450000, 0, 0, 0, 0}, {300000, 0, 0, 0, 0}},
-    {"파리", {320000, 200000, 400000, 600000, 1000000}, {28000, 150000, 450000, 1000000, 1400000}},
-    {"로마", {320000, 200000, 400000, 600000, 1000000}, {28000, 150000, 450000, 1000000, 1400000}},
-    {"런던", {350000, 200000, 400000, 600000, 1000000}, {35000, 170000, 500000, 1100000, 1500000}},
-    {"뉴욕", {350000, 200000, 400000, 600000, 1000000}, {35000, 170000, 500000, 1100000, 1500000}},
-    {"서울", {1000000, 0, 0, 0, 0}, {2000000, 0, 0, 0, 0}},
-    {"사회복지기금", {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}},
-    {"기금납부", {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}}
+    {"출발", 0, 0},
+    {"타이베이", 50000, 5000},
+    {"베이징", 80000, 8000},
+    {"마닐라", 80000, 8000},
+    {"제주도", 200000, 20000},
+    {"싱가포르", 100000, 10000},
+    {"카이로", 100000, 10000},
+    {"이스탄불", 120000, 12000},
+    {"아테네", 140000, 14000},
+    {"코펜하겐", 160000, 16000},
+    {"스톡홀름", 160000, 16000},
+    {"베른", 180000, 18000},
+    {"베를린", 180000, 18000},
+    {"오타와", 200000, 20000},
+    {"인도", 0, 0},  // 특수 칸
+    {"부에노스", 220000, 22000},
+    {"상파울루", 240000, 24000},
+    {"시드니", 240000, 24000},
+    {"부산", 500000, 50000},
+    {"하와이", 260000, 26000},
+    {"도쿄", 300000, 30000},
+    {"마드리드", 280000, 28000},
+    {"파리", 320000, 32000},
+    {"런던", 350000, 35000},
+    {"로마", 320000, 32000},
+    {"뉴욕", 350000, 35000},
+    {"서울", 1000000, 100000},
+    {"", 0, 0},  // 빈 칸
+    {"", 0, 0},  // 빈 칸
+    {"", 0, 0},  // 빈 칸
+    {"", 0, 0},  // 빈 칸
+    {"", 0, 0}   // 빈 칸
 };
 
-// 게임룸 구조체
 typedef struct {
     int position;
     int money;
-    int properties[32];  // 소유한 땅 정보
-    int buildingLevel[32];  // 각 땅의 건물 레벨
+    int laps;
     SOCKET socket;
     int isActive;
-    int playerNum;     // 플레이어 번호 (0-3)
+    int playerNum;
 } Player;
 
 typedef struct {
     char name[50];
-    Player players[MAX_PLAYERS];
+    Player players[2];
     int numPlayers;
     int currentTurn;
     int isGameStarted;
-    int properties[32];  // 각 땅의 소유자 정보 (-1: 없음, 0~3: 플레이어 번호)
+    int properties[32];  // Stores owner of each property (-1 for unowned)
+    int roundCount;      // Add round counter
 } GameRoom;
 
 // 전역 변수
@@ -84,8 +87,37 @@ void broadcastToRoom(GameRoom* room, const char* message, SOCKET excludeSocket);
 GameRoom* find_room(const char* roomName);
 void start_game(GameRoom* room);
 void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2);
-void handle_property_purchase(GameRoom* room, int playerIndex);
-void handle_build(GameRoom* room, int playerIndex, int position);
+void handle_property_purchase(GameRoom* room, int playerNum, int position);
+void give_salary(GameRoom* room, int playerNum);
+void handle_turn(GameRoom* room);
+void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum);
+void handle_toll(GameRoom* room, int position);
+void init_room(GameRoom* room);
+
+// 방 초기화 함수 구현 추가 (함수 선언 아래에 위치)
+void init_room(GameRoom* room) {
+    memset(room, 0, sizeof(GameRoom));  // 전체 구조체를 0으로 초기화
+
+    // 모든 땅의 소유자를 -1로 초기화
+    for (int i = 0; i < 32; i++) {
+        room->properties[i] = -1;
+    }
+
+    // 플레이어 초기화
+    for (int i = 0; i < 2; i++) {
+        Player* player = &room->players[i];
+        player->isActive = 0;
+        player->money = INITIAL_MONEY;
+        player->position = 0;
+        player->playerNum = i;
+        player->laps = 0;
+    }
+
+    room->numPlayers = 0;
+    room->currentTurn = 0;
+    room->isGameStarted = 0;
+    room->roundCount = 1;
+}
 
 // 방 찾기 함수
 GameRoom* find_room(const char* roomName) {
@@ -126,72 +158,222 @@ void broadcastToRoom(GameRoom* room, const char* message, SOCKET excludeSocket) 
 }
 
 // 주사위 굴리기 처리
+// Modify handle_dice_roll to simply pass turn for special squares
 void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2) {
     if (room->currentTurn != playerIndex) {
-        return;  // 자신의 턴이 아니면 무시
+        return;
     }
 
     Player* player = &room->players[playerIndex];
+    Player* otherPlayer = &room->players[1 - playerIndex];
     char msg[BUFFER_SIZE];
 
-    // 주사위 결과 브로드캐스트
+    // Broadcast dice roll
     sprintf(msg, "DICE:%d,%d", dice1, dice2);
     broadcastToRoom(room, msg, INVALID_SOCKET);
+    Sleep(500);
 
-    Sleep(1000);  // 주사위 결과를 보여줄 시간
-
-    // 말 이동
+    // Move player
     int oldPos = player->position;
-    player->position = (oldPos + dice1 + dice2) % 40;
+    player->position = (oldPos + dice1 + dice2) % 32;
 
-    // 이동 결과 브로드캐스트
+    // Broadcast movement
     sprintf(msg, "MOVE:%d,%d", playerIndex, player->position);
     broadcastToRoom(room, msg, INVALID_SOCKET);
+    Sleep(500);
 
-    Sleep(1000);  // 이동을 보여줄 시간
-
-    // 출발지 통과 시 월급 지급
-    if (oldPos > player->position) {
+    // Check for lap completion
+    if (player->position < oldPos) {
+        player->laps++;
         player->money += 200000;
         sprintf(msg, "SALARY:%d,%d", playerIndex, player->money);
         broadcastToRoom(room, msg, INVALID_SOCKET);
+
+        // Check for new round
+        if (player->laps == otherPlayer->laps) {
+            room->roundCount++;
+            sprintf(msg, "ROUND:%d", room->roundCount);
+            broadcastToRoom(room, msg, INVALID_SOCKET);
+        }
     }
 
-    // 땅 구매 가능 여부 확인 및 알림
-    if (player->position < 32 && room->properties[player->position] == 0) {
-        sprintf(msg, "CAN_BUY:%d", player->position);
-        send(player->socket, msg, strlen(msg), 0);
-    }
-
-    // 더블이 아닐 경우에만 턴 변경
-    if (dice1 != dice2) {
-        room->currentTurn = (room->currentTurn + 1) % room->numPlayers;
-        sprintf(msg, "TURN:%d", room->currentTurn);
+    // Check for forced movement to India
+    if (player->laps > otherPlayer->laps + 1) {
+        player->position = INDIA_POSITION;
+        player->laps = otherPlayer->laps + 1;
+        sprintf(msg, "FORCE_MOVE:%d,%d", playerIndex, INDIA_POSITION);
         broadcastToRoom(room, msg, INVALID_SOCKET);
+    }
+
+    // If landed on special square or empty square, just pass turn
+    if (Deeds[player->position].price == 0) {
+        handle_turn(room);
+        return;
+    }
+
+    // Handle property actions after movement
+    if (room->properties[player->position] == -1 &&
+        player->position > 0 &&
+        player->position < 32 &&
+        Deeds[player->position].price > 0) {
+
+        // Include property name and position in CAN_BUY message
+        char msg[BUFFER_SIZE];
+        sprintf(msg, "CAN_BUY:%d,%d,%s",
+            player->position,
+            Deeds[player->position].price,
+            Deeds[player->position].name);
+        send(player->socket, msg, strlen(msg), 0);
+    } else if (room->properties[player->position] != playerIndex) {
+        handle_toll(room, player->position);
+        handle_turn(room);
+    } else {
+        handle_turn(room);
     }
 }
 
-// 건물 건설 처리 함수 추가
-void handle_build(GameRoom* room, int playerIndex, int position) {
-    Player* player = &room->players[playerIndex];
-    char msg[BUFFER_SIZE];
-    int buildCost;
+// 땅 구매 처리 함수 수정
+void handle_property_purchase(GameRoom* room, int playerNum, int position) {
+    if (position < 0 || position >= 32) return;
 
-    // 건물 건설 가능 여부 확인
-    if (position < 0 || position >= 32 ||
-        player->properties[position] != 1 ||
-        player->money < Deeds[position].price[player->buildingLevel[position] + 1]) {
-        sprintf(msg, "BUILD_FAILED:%d", position);
+    Player* player = &room->players[playerNum];
+    const Deed* property = &Deeds[position];
+    char msg[BUFFER_SIZE];  // 버퍼 선언 추가
+
+    // Verify player position matches purchase position
+    if (player->position != position) {
+        sprintf(msg, "ERROR:잘못된 위치입니다");
         send(player->socket, msg, strlen(msg), 0);
         return;
     }
 
-    buildCost = Deeds[position].price[player->buildingLevel[position] + 1];
-    player->money -= buildCost;
-    player->buildingLevel[position]++;
+    if (room->properties[position] != -1 || player->position != position) return;
 
-    sprintf(msg, "BUILD_SUCCESS:%d,%d,%d", position, player->buildingLevel[position], player->money);
+    int cost = property->price;
+    if (player->money >= cost) {
+        player->money -= cost;
+        room->properties[position] = playerNum;
+
+        // Send detailed purchase success message
+        sprintf(msg, "PURCHASE_SUCCESS:%d,%d,%d,%s",
+            position, playerNum, player->money, property->name);
+        broadcastToRoom(room, msg, INVALID_SOCKET);
+
+        Sleep(500);  // Give time for UI update
+
+        // Change turn
+        handle_turn(room);
+    } else {
+        sprintf(msg, "ERROR:돈이 부족합니다");
+        send(player->socket, msg, strlen(msg), 0);
+
+        Sleep(500);  // Give time for message display
+
+        // Change turn even if purchase fails
+        handle_turn(room);
+    }
+}
+
+// 월급 지급 함수 추가
+void give_salary(GameRoom* room, int playerNum) {
+    Player* player = &room->players[playerNum];
+    player->money += 200000; // 20만원 월급
+
+    char msg[BUFFER_SIZE];
+    sprintf(msg, "SALARY:%d,%d", playerNum, player->money);
     broadcastToRoom(room, msg, INVALID_SOCKET);
+}
+
+// 턴 처리 함수 수정
+void handle_turn(GameRoom* room) {
+    Player* current = &room->players[room->currentTurn];
+    Player* other = &room->players[1 - room->currentTurn];
+
+    // Check if round is complete
+    if (current->laps == other->laps && current->position < other->position) {
+        room->roundCount++;
+        char msg[BUFFER_SIZE];
+        sprintf(msg, "ROUND:%d", room->roundCount);
+        broadcastToRoom(room, msg, INVALID_SOCKET);
+    }
+
+    room->currentTurn = 1 - room->currentTurn; // Switch between 0 and 1
+
+    // Add delay before sending turn message
+    Sleep(500);
+
+    // Send turn message with current player position
+    char msg[BUFFER_SIZE];
+    sprintf(msg, "TURN:%d,%d", room->currentTurn,
+        room->players[room->currentTurn].position);
+    broadcastToRoom(room, msg, INVALID_SOCKET);
+}
+
+// handle_toll 함수 구현 추가 (파산 처리 함수 앞에 위치)
+void handle_toll(GameRoom* room, int position) {
+    Player* current = &room->players[room->currentTurn];
+    int owner = room->properties[position];
+
+    if (owner != -1 && owner != room->currentTurn) {
+        // 통행료 계산
+        const Deed* property = &Deeds[position];
+        int rent = property->baseRent * room->roundCount; // Rent increases each round
+
+        // 통행료 지불 처리
+        if (current->money >= rent) {
+            current->money -= rent;
+            room->players[owner].money += rent;
+
+            char msg[BUFFER_SIZE];
+            sprintf(msg, "TOLL:%d,%d,%d", room->currentTurn, owner, rent);
+            broadcastToRoom(room, msg, INVALID_SOCKET);
+        } else {
+            // 통행료를 지불할 수 없는 경우 파산 처리
+            handle_bankruptcy(room, room->currentTurn, owner);
+        }
+    }
+}
+
+// handle_bankruptcy 함수 구현 추가
+void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum) {
+    Player* bankrupt = &room->players[playerNum];
+
+    // 플레이어를 파산 상태로 변경
+    bankrupt->isActive = 0;
+    bankrupt->money = 0;
+
+    // 모든 소유 부동산을 처리
+    for (int i = 0; i < 32; i++) {
+        if (room->properties[i] == playerNum) {
+            if (creditorNum == -1) {
+                // 은행에 의한 파산: 부동산은 다시 구매 가능한 상태로
+                room->properties[i] = -1;
+            } else {
+                // 다른 플레이어에 의한 파산: 부동산은 채권자에게 이전
+                room->properties[i] = creditorNum;
+            }
+        }
+    }
+
+    // 파산 알림 전송
+    char msg[BUFFER_SIZE];
+    sprintf(msg, "BANKRUPTCY:%d,%d", playerNum, creditorNum);
+    broadcastToRoom(room, msg, INVALID_SOCKET);
+
+    // 게임 종료 조건 체크 (활성 플레이어가 1명 이하면 게임 종료)
+    int activePlayers = 0;
+    int winner = -1;
+    for (int i = 0; i < room->numPlayers; i++) {
+        if (room->players[i].isActive) {
+            activePlayers++;
+            winner = i;
+        }
+    }
+
+    if (activePlayers <= 1 && winner != -1) {
+        sprintf(msg, "GAME_OVER:%d", winner);
+        broadcastToRoom(room, msg, INVALID_SOCKET);
+    }
 }
 
 // 클라이언트 처리 스레드
@@ -216,13 +398,13 @@ DWORD WINAPI client_handler(LPVOID clientSocket) {
             if (numRooms < MAX_ROOMS) {
                 char* roomName = buffer + 7;
                 if (find_room(roomName) == NULL) {
-                    strcpy(rooms[numRooms].name, roomName);
-                    rooms[numRooms].numPlayers = 1;
-                    rooms[numRooms].isGameStarted = 0;
-                    rooms[numRooms].currentTurn = 0;
+                    init_room(&rooms[numRooms]);  // 방 초기화
+                    strncpy(rooms[numRooms].name, roomName, sizeof(rooms[numRooms].name) - 1);
+                    rooms[numRooms].name[sizeof(rooms[numRooms].name) - 1] = '\0';
 
-                    // 방장은 항상 플레이어 0
+                    // 방장 초기화
                     Player* player = &rooms[numRooms].players[0];
+                    memset(player, 0, sizeof(Player));  // 플레이어 구조체 초기화
                     player->socket = sock;
                     player->isActive = 1;
                     player->money = INITIAL_MONEY;
@@ -231,14 +413,13 @@ DWORD WINAPI client_handler(LPVOID clientSocket) {
 
                     roomIndex = numRooms;
                     playerIndex = 0;
+                    rooms[numRooms].numPlayers = 1;
                     numRooms++;
 
-                    // 방장에게 플레이어 번호 전송
                     char msg[BUFFER_SIZE];
                     sprintf(msg, "PLAYER_NUM:%d", 0);
                     send(sock, msg, strlen(msg), 0);
-
-                    send(sock, "CREATED:방이 생성되었습니다.\n", 100, 0);
+                    send(sock, "CREATED:방이 생성되었습니다.\n", strlen("CREATED:방이 생성되었습니다.\n"), 0);
                 }
             }
         }
@@ -282,31 +463,18 @@ DWORD WINAPI client_handler(LPVOID clientSocket) {
             if (strncmp(buffer, "ROLL:", 5) == 0) {
                 if (room->currentTurn == playerIndex) {
                     int dice1, dice2;
-                    sscanf(buffer + 5, "%d,%d", &dice1, &dice2);
-
-                    // 주사위 결과 브로드캐스트
-                    char msg[BUFFER_SIZE];
-                    sprintf(msg, "DICE:%d,%d", dice1, dice2);
-                    broadcastToRoom(room, msg, INVALID_SOCKET);
-
-                    // 말 이동
-                    int newPos = (room->players[playerIndex].position + dice1 + dice2) % 40;
-                    room->players[playerIndex].position = newPos;
-                    sprintf(msg, "MOVE:%d,%d", playerIndex, newPos);
-                    broadcastToRoom(room, msg, INVALID_SOCKET);
-
-                    // 더블이 아니면 턴 변경
-                    if (dice1 != dice2) {
-                        room->currentTurn = (room->currentTurn + 1) % room->numPlayers;
-                        sprintf(msg, "TURN:%d", room->currentTurn);
-                        broadcastToRoom(room, msg, INVALID_SOCKET);
+                    if (sscanf(buffer + 5, "%d,%d", &dice1, &dice2) == 2) {
+                        handle_dice_roll(room, playerIndex, dice1, dice2);
                     }
                 }
             }
-            else if (strncmp(buffer, "BUILD:", 6) == 0) {
+            else if (strncmp(buffer, "BUY:", 4) == 0) {
                 int position;
-                sscanf(buffer + 6, "%d", &position);
-                handle_build(room, playerIndex, position);
+                sscanf(buffer + 4, "%d", &position);
+                handle_property_purchase(room, playerIndex, position);
+            }
+            else if (strncmp(buffer, "SKIP_PURCHASE", 12) == 0) {
+                handle_turn(room);  // 구매를 건너뛰고 턴 진행
             }
         }
 
@@ -339,7 +507,7 @@ int main() {
 
     SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket == INVALID_SOCKET) {
-        printf("소켓 ���성 실패\n");
+        printf("소켓 생성 실패\n");
         return 1;
     }
 
