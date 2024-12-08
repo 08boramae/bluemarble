@@ -34,7 +34,6 @@ typedef struct {
     int baseRent;
     int ownerNum;
     int buildingLevel;
-    int isCanBuild;
 } Deed;
 
 // Forward declare struct player
@@ -62,7 +61,48 @@ typedef struct {
 } GameRoom;
 
 // Global variables
-Deed Deeds[32];  // 전역 Deeds 배열 추가
+Deed Deeds[40] = {
+    {"출발", 0, 0, -1, 0},
+    {"타이베이", 50000, 5000, -1, 0},
+    {"", 0, 0, -1, 0},  // 빈 칸
+    {"베이징", 80000, 8000, -1, 0},
+    {"마닐라", 80000, 8000, -1, 0},
+    {"제주도", 200000, 20000, -1, 0},
+    {"싱가포르", 100000, 10000, -1, 0},
+    {"", 0, 0, -1, 0},  // 빈 칸
+    {"카이로", 100000, 10000, -1, 0},
+    {"이스탄불", 120000, 12000, -1, 0},
+    {"인도", 0, 0, -1, 0},  // 특수 칸
+    {"아테네", 140000, 14000, -1, 0},
+    {"", 0, 0, -1, 0},  // 빈 칸
+    {"코펜하겐", 160000, 16000, -1, 0},
+    {"스톡홀름", 160000, 16000, -1, 0},
+    {"베른", 180000, 18000, -1, 0},
+    {"", 0, 0, -1, 0},  // 빈 칸
+    {"베를린", 180000, 18000, -1, 0},
+    {"오타와", 200000, 20000, -1, 0},
+    {"", 0, 0, -1, 0},  // 빈 칸
+    {"부에노스", 220000, 22000, -1, 0},
+    {"", 0, 0, -1, 0},  // 빈 칸
+    {"상파울루", 240000, 24000, -1, 0},
+    {"시드니", 240000, 24000, -1, 0},
+    {"부산", 500000, 50000, -1, 0},
+    {"하와이", 260000, 26000, -1, 0},
+    {"리스본", 260000, 26000, -1, 0},
+    {"퀸엘리자베스", 300000, 30000, -1, 0},
+    {"도쿄", 350000, 35000, -1, 0},
+    {"마드리드", 350000, 35000, -1, 0},
+    {"", 0, 0, -1, 0},   // 빈 칸
+    {"도쿄", 300000, 30000, -1, 0},
+    {"컬럼비아", 450000, 45000, -1, 0},
+    {"파리", 320000, 32000, -1, 0},
+    {"로마", 320000, 32000, -1, 0},
+    {"", 0, 0, -1, 0},   // 빈 칸
+    {"런던", 350000, 35000, -1, 0},
+    {"뉴욕", 350000, 35000, -1, 0},
+    {"", 0, 0, -1, 0},   // 빈 칸
+    {"서울", 1000000, 100000, -1, 0}
+};
 struct player Players[2];  // Changed to 2 players only
 SOCKET clientSocket;
 CRITICAL_SECTION printLock;
@@ -86,14 +126,13 @@ int turnChangeInProgress = 0;  // Track turn change state
 void textColor(int colorNum);
 void gotoxy(int x, int y);
 void draw_board();
-void init_deeds();
 void init_players(int player_cnt);
 int roll_dice();
 void handle_network_message(char* message);
 void send_network_message(const char* message);
 void draw_player_markers();
 DWORD WINAPI receive_thread(LPVOID arg);
-void printInCell(int x, int y, char* text, int price);
+void printInCell(int x, int y, const Deed* deed);
 void game_loop();
 void handle_toll(GameRoom* room, int position);
 void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum);
@@ -108,92 +147,6 @@ void textColor(int colorNum) {
 void gotoxy(int x, int y) {
     COORD pos = { x, y };
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), pos);
-}
-
-// deed 초기화 함수
-// Deed 초기화 함수
-void init_deeds() {
-    char names[29][40] = {
-        "타이베이", "베이징", "마닐라", "제주도", "싱가포르", "카이로", "이스탄불",
-        "아테네", "코펜하겐", "스톡홀름", "콩코드", "베른", "베를린", "오타와",
-        "부에노스", "상파울루", "시드니", "부산", "하와이", "리스본", "퀸엘리자베스", "마드리드",
-        "도쿄", "컬럼비아", "파리", "로마", "런던", "뉴욕", "서울"
-    };
-
-    // 가격 정보 (대지, 별장1, 별장2, 빌딩, 호텔)
-    int prices[29][5] = {
-        {50000, 50000, 100000, 150000, 250000},
-        {80000, 50000, 100000, 150000, 250000},
-        {80000, 50000, 100000, 150000, 250000},
-        {200000, 0, 0, 0, 0},
-        {100000, 50000, 100000, 150000, 250000},
-        {100000, 50000, 100000, 150000, 250000},
-        {120000, 50000, 100000, 150000, 250000},
-        {140000, 100000, 200000, 300000, 500000},
-        {160000, 100000, 200000, 300000, 500000},
-        {160000, 100000, 200000, 300000, 500000},
-        {200000, 0, 0, 0, 0},
-        {180000, 100000, 200000, 300000, 500000},
-        {180000, 100000, 200000, 300000, 500000},
-        {200000, 100000, 200000, 300000, 500000},
-        {220000, 150000, 300000, 450000, 750000},
-        {240000, 150000, 300000, 450000, 750000},
-        {240000, 150000, 300000, 450000, 750000},
-        {500000, 0, 0, 0, 0},
-        {260000, 150000, 300000, 450000, 750000},
-        {260000, 150000, 300000, 450000, 750000},
-        {300000, 0, 0, 0, 0},
-        {280000, 150000, 300000, 450000, 750000},
-        {300000, 200000, 400000, 600000, 1000000},
-        {450000, 0, 0, 0, 0},
-        {320000, 200000, 400000, 600000, 1000000},
-        {320000, 200000, 400000, 600000, 1000000},
-        {350000, 200000, 400000, 600000, 1000000},
-        {350000, 200000, 400000, 600000, 1000000},
-        {1000000, 0, 0, 0, 0}
-    };
-
-    // 통행료 정보
-    int tolls[29][5] = {
-        {2000, 10000, 30000, 90000, 250000},
-        {4000, 20000, 60000, 180000, 450000},
-        {4000, 20000, 60000, 180000, 450000},
-        {300000, 0, 0, 0, 0},
-        {6000, 30000, 90000, 270000, 550000},
-        {6000, 30000, 90000, 270000, 550000},
-        {8000, 40000, 100000, 300000, 600000},
-        {10000, 50000, 150000, 450000, 750000},
-        {12000, 60000, 180000, 500000, 900000},
-        {12000, 60000, 180000, 500000, 900000},
-        {300000, 0, 0, 0, 0},
-        {14000, 70000, 200000, 550000, 950000},
-        {14000, 70000, 200000, 550000, 950000},
-        {16000, 80000, 220000, 600000, 1000000},
-        {18000, 90000, 250000, 700000, 1050000},
-        {20000, 100000, 300000, 750000, 1100000},
-        {20000, 100000, 300000, 750000, 1100000},
-        {600000, 0, 0, 0, 0},
-        {22000, 110000, 330000, 800000, 1150000},
-        {22000, 110000, 330000, 800000, 1150000},
-        {250000, 0, 0, 0, 0},
-        {24000, 120000, 360000, 850000, 1200000},
-        {26000, 130000, 390000, 900000, 1270000},
-        {300000, 0, 0, 0, 0},
-        {28000, 150000, 450000, 1000000, 1400000},
-        {28000, 150000, 450000, 1000000, 1400000},
-        {35000, 170000, 500000, 1100000, 1500000},
-        {35000, 170000, 500000, 1100000, 1500000},
-        {2000000, 0, 0, 0, 0}
-    };
-
-    for (int i = 0; i < 29; i++) {
-        strncpy(Deeds[i].name, names[i], sizeof(Deeds[i].name));
-        Deeds[i].ownerNum = -1;
-        Deeds[i].buildingLevel = 0;
-        Deeds[i].price = prices[i][0];  // Base price
-        Deeds[i].baseRent = tolls[i][0]; // Base rent
-        Deeds[i].isCanBuild = (prices[i][1] > 0); // 별장1 가격이 0보다 크면 건설 가능
-    }
 }
 
 // 플레이어 초기화 함수
@@ -319,52 +272,27 @@ void draw_dice(int x, int y, int value) {
 }
 
 // 셀에 텍스트 출력 함수
-void printInCell(int x, int y, char* text, int price) {
-    char line[2][10 + 1] = { "" };
-    int len = strlen(text);
-    int currentLine = 0, currentChar = 0;
-
-    if (!strcmp(text, "황금열쇠")) {
-        textColor(6);
+void printInCell(int x, int y, const Deed* deed) {
+    if (strlen(deed->name) == 0) {
+        gotoxy(x, y + 2);
+        printf("황금열쇠");
+        return;
     }
 
-    for (int i = 0; i < len; i++) {
-        line[currentLine][currentChar++] = text[i];
-        if (currentChar == 10 || i == len - 1) {
-            line[currentLine][currentChar] = '\0';
-            currentLine++;
-            currentChar = 0;
-            if (currentLine >= 2) break;
-        }
-    }
+    gotoxy(x, y);
+    printf("%s", deed->name);
 
-    for (int i = 0; i < currentLine; i++) {
-        if (strlen(text) <= 4 || !price) {
-            gotoxy(x, y + i + 1);
-        }
-        else {
-            gotoxy(x, y + i);
-        }
-        printf("%s", line[i]);
-    }
-
-    if (price) {
+    if (deed->price > 0) {
         gotoxy(x, y + 3);
-        printf("%d원", price);
+        printf("%d원", deed->price);
     }
 
-    // Draw ownership marker if property is owned
-    for (int i = 0; i < 32; i++) {
-        if (strcmp(Deeds[i].name, text) == 0 && Deeds[i].ownerNum != -1) {
-            gotoxy(x + 8, y + 3);  // Position for ownership marker
-            textColor(Players[Deeds[i].ownerNum].color);
-            printf("■");  // Ownership marker
-            textColor(15);
-            break;
-        }
+    if (deed->ownerNum >= 0) {
+        gotoxy(x + 8, y + 3);
+        textColor(Players[deed->ownerNum].color);
+        printf("■");
+        textColor(15);
     }
-
-    textColor(15);
 }
 
 // 말 그리기 함수
@@ -496,7 +424,7 @@ void handle_network_message(char* message) {
         gotoxy(0, 55);
         printf("방이 생성되었습니다. 다른 플레이어를 기다리는 중...\n");
         // 방 생성 성공 시 추가 처리
-        gameState = STATE_LOBBY;  // 로비 상태 ???지
+        gameState = STATE_LOBBY;  // 로비 상태 ??????
     }
     else if (strcmp(command, "JOIN_FAILED") == 0) {
         gotoxy(0, 55);
@@ -546,7 +474,7 @@ void handle_network_message(char* message) {
         int position, playerNum, money;
         sscanf(payload, "%d,%d,%d", &position, &playerNum, &money);
         Players[playerNum].money = money;
-        Deeds[position].ownerNum = playerNum;  // Update ownership
+        Deeds[position].ownerNum = playerNum;  // Now this should work
 
         // Clear purchase prompt and update screen
         gotoxy(0, 57);
@@ -606,12 +534,12 @@ void draw_board() {
         }
         puts("│");
     }
-    puts("├──??───────┼──────────┴──────────┴─??────────┴──────────┴──────────┴──────────┴──────────??──────────┴──────────┼──────────┤");
+    puts("├──────────┼──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┼──────────┤");
 
     // 중간 라인
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 4; j++) {
-            puts("│          │                                                                                                  ???          │");
+            puts("│          │                                                                                                  │          │");
         }
         puts("├──────────┤                                                                                                  ├──────────┤");
     }
@@ -633,17 +561,17 @@ void draw_board() {
     // 블루마블 타이틀 그리기
     char title_art[12][150] = {
         "  ■■     ■■    ■■■■■■■■            ■    ■      ■  ",
-        "  ■■     ■■          ■■    ■■■■■■  ■    ■■???■■■■■  ",
+        "  ■■     ■■          ■■    ■■■■■■  ■    ■■■■■■■■  ",
         "  ■■■■■■■■■    ■■■■■■■■    ■    ■  ■    ■      ■  ",
         "  ■■     ■■    ■■          ■    ■  ■    ■■■■■■■■  ",
         "  ■■■■■■■■■    ■■          ■    ■  ■■■■            ",
         "               ■■■■■■■■■   ■    ■  ■■■■■■■■■■■■■■■",
         "                           ■    ■  ■       ■■      ",
-        "■■■??■■■■■■■???■■■■■■■■■■■■■  ■    ■  ■    ■■■■■■■■  ",
+        "■■■■■■■■■■■ ■■■■■■■■■■■■■  ■    ■  ■    ■■■■■■■■  ",
         "      ■■          ■■       ■■■■■■  ■           ■  ",
         "      ■■          ■■               ■    ■■■■■■■■  ",
         "      ■■          ■■               ■    ■          ",
-        "      ■■          ■■               ■    ■■■■■???■■■ "
+        "      ■■          ■■               ■    ■■■■■■■■■ "
     };
 
     int title_x = 37, title_y = 10;
@@ -677,11 +605,11 @@ void draw_board() {
 
     // 황금열쇠 그리기
     char key_art[7][100] = {
-        "┌──────────────??─────────────┐",
+        "┌────────────────────────────┐",
         "│  .---.                     │",
         "│ /    |\\________________    │",
         "│ | ()  | ________   _   _)  │",
-        "│ \\    |/        | | | |     ???",
+        "│ \\    |/        | | | |     │",
         "│  `---'         \" - \" |_|   │",
         "└────────────────────────────┘"
     };
@@ -693,81 +621,30 @@ void draw_board() {
     }
 
     // 땅 정보 표시 (각 칸에 도시 이름??? 가격 출력)
-    char names[40][40] = {
-        "출발      ", "1", "황금열쇠", "1", "1", "1", "1", "황금??쇠", "1", "1",
-        "무인도    ", "1", "황금열쇠", "1", "1", "1", "1", "황금열쇠", "1", "1",
-        "사회복지기금", "1", "황금열쇠", "1", "1", "1", "1", "1", "1", "1",
-        "우주여행  ", "1", "1", "1", "1", "황금열쇠", "1", "1", "사회복지기금", "1"
-    };
-
-    int cnt = 0;
     int curr_x = 111, curr_y = 51;
+    int deedIndex = 0;
 
     // 아래쪽 행 출력 (좌->우)
     for (int i = 0; i < 10; i++) {
-        if (strcmp(names[i], "1") == 0) {
-            printInCell(curr_x, curr_y, Deeds[cnt].name, Deeds[cnt].price);
-            if (Deeds[cnt].ownerNum >= 0) {
-                gotoxy(curr_x + 8, curr_y + 3);
-                textColor(Players[Deeds[cnt].ownerNum].color);
-                printf("■");
-                textColor(15);
-            }
-            cnt++;
-        } else {
-            printInCell(curr_x, curr_y, names[i], 0);
-        }
+        printInCell(curr_x, curr_y, &Deeds[deedIndex++]);
         curr_x -= 11;
     }
 
-    // 왼쪽 열 ???력 (아래->위)
-    for (int i = 10; i < 20; i++) {
-        if (strcmp(names[i], "1") == 0) {
-            printInCell(curr_x, curr_y, Deeds[cnt].name, Deeds[cnt].price);
-            if (Deeds[cnt].ownerNum >= 0) {
-                gotoxy(curr_x + 8, curr_y + 3);
-                textColor(Players[Deeds[cnt].ownerNum].color);
-                printf("■");
-                textColor(15);
-            }
-            cnt++;
-        } else {
-            printInCell(curr_x, curr_y, names[i], 0);
-        }
+    // 왼쪽 열 출력 (아래->위)
+    for (int i = 0; i < 10; i++) {
+        printInCell(curr_x, curr_y, &Deeds[deedIndex++]);
         curr_y -= 5;
     }
 
     // 위쪽 행 출력 (좌->우)
-    for (int i = 20; i < 30; i++) {
-        if (strcmp(names[i], "1") == 0) {
-            printInCell(curr_x, curr_y, Deeds[cnt].name, Deeds[cnt].price);
-            if (Deeds[cnt].ownerNum >= 0) {
-                gotoxy(curr_x + 8, curr_y + 3);
-                textColor(Players[Deeds[cnt].ownerNum].color);
-                printf("■");
-                textColor(15);
-            }
-            cnt++;
-        } else {
-            printInCell(curr_x, curr_y, names[i], 0);
-        }
+    for (int i = 0; i < 10; i++) {
+        printInCell(curr_x, curr_y, &Deeds[deedIndex++]);
         curr_x += 11;
     }
 
     // 오른쪽 열 출력 (위->아래)
-    for (int i = 30; i < 40; i++) {
-        if (strcmp(names[i], "1") == 0) {
-            printInCell(curr_x, curr_y, Deeds[cnt].name, Deeds[cnt].price);
-            if (Deeds[cnt].ownerNum >= 0) {
-                gotoxy(curr_x + 8, curr_y + 3);
-                textColor(Players[Deeds[cnt].ownerNum].color);
-                printf("■");
-                textColor(15);
-            }
-            cnt++;
-        } else {
-            printInCell(curr_x, curr_y, names[i], 0);
-        }
+    for (int i = 0; i < 10; i++) {
+        printInCell(curr_x, curr_y, &Deeds[deedIndex++]);
         curr_y += 5;
     }
 
@@ -833,6 +710,17 @@ void game_loop() {
             if (_kbhit()) {
                 char input = _getch();
 
+                if (input == ' ' && !diceRollInProgress && !lastDiceRoll) {
+                    diceRollInProgress = 1;
+                    lastDiceRoll = 1;
+                    gotoxy(0, 57);
+                    printf("주사위를 굴립니다...");
+                    int dice1 = (rand() % 6) + 1;
+                    int dice2 = (rand() % 6) + 1;
+                    sprintf(buffer, "ROLL:%d,%d", dice1, dice2);
+                    send_network_message(buffer);
+                }
+                // ...existing code...
                 if (waitingForPurchase) {
                     switch(input) {
                         case 'y':
@@ -854,17 +742,6 @@ void game_loop() {
                             }
                             break;
                     }
-                }
-                else if (input == ' ' && !diceRollInProgress && !lastDiceRoll) {
-                    diceRollInProgress = 1;
-                    lastDiceRoll = 1;
-                    gotoxy(0, 57);
-                    printf("주사위를 굴립니다...");
-                    int dice1 = (rand() % 6) + 1;
-                    int dice2 = (rand() % 6) + 1;
-                    printf("DEBUG: 주사위 결과 - %d, %d\n", dice1, dice2);
-                    sprintf(buffer, "ROLL:%d,%d", dice1, dice2);
-                    send_network_message(buffer);
                 }
             }
         }
@@ -918,7 +795,6 @@ void game_start() {
     printf("서버에 연결되었습니다!\n");
 
     // 초기화 순서 변경
-    init_deeds();
     init_players(2);
 
     // 버퍼링 모드 변경
@@ -1031,7 +907,7 @@ void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum) {
     bankrupt->isActive = 0;
 
     // 모든 소유 재산 이전
-    for (int i = 0; i < 29; i++) {
+    for (int i = 0; i < 40; i++) {  // Changed to 40 to match array size
         if (Deeds[i].ownerNum == playerNum) {
             Deeds[i].ownerNum = creditorNum;
             Deeds[i].buildingLevel = 0;  // ??물 초기화
@@ -1053,13 +929,14 @@ void handle_build(GameRoom* room, int playerNum, int position) {
     }
 
     struct player* player = &room->players[playerNum];
-    Deed* property = &Deeds[position];  // Changed to use Deed* instead of struct deed*
+    Deed* property = &Deeds[position];
 
-    if (property->ownerNum != playerNum || !property->isCanBuild) {
+    // Check if the property is buildable (we'll consider any property with price > 0 as buildable)
+    if (property->ownerNum != playerNum || property->price <= 0) {
         return;
     }
 
-    int buildCost = property->price;  // Use base price for simplicity
+    int buildCost = property->price;
     if (player->money >= buildCost) {
         player->money -= buildCost;
         property->buildingLevel++;

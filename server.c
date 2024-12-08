@@ -15,6 +15,7 @@
 #define BUFFER_SIZE 1024
 #define INITIAL_MONEY 3000000
 #define INDIA_POSITION 15
+#define MAX_PROPERTIES 40  // Match the Deeds array size
 
 typedef struct {
     char name[50];
@@ -23,39 +24,47 @@ typedef struct {
 } Deed;
 
 // Replace the Deeds array definition with corrected property sequence
-const Deed Deeds[32] = {
+const Deed Deeds[40] = {
     {"출발", 0, 0},
     {"타이베이", 50000, 5000},
+    {"", 0, 0},  // 빈 칸
     {"베이징", 80000, 8000},
     {"마닐라", 80000, 8000},
     {"제주도", 200000, 20000},
     {"싱가포르", 100000, 10000},
+    {"", 0, 0},  // 빈 칸
     {"카이로", 100000, 10000},
     {"이스탄불", 120000, 12000},
+    {"인도", 0, 0},  // 특수 칸
     {"아테네", 140000, 14000},
+    {"", 0, 0},  // 빈 칸
     {"코펜하겐", 160000, 16000},
     {"스톡홀름", 160000, 16000},
     {"베른", 180000, 18000},
+    {"", 0, 0},  // 빈 칸
     {"베를린", 180000, 18000},
     {"오타와", 200000, 20000},
-    {"인도", 0, 0},  // 특수 칸
+    {"", 0, 0},  // 빈 칸
     {"부에노스", 220000, 22000},
+    {"", 0, 0},  // 빈 칸
     {"상파울루", 240000, 24000},
     {"시드니", 240000, 24000},
     {"부산", 500000, 50000},
     {"하와이", 260000, 26000},
+    {"리스본", 260000, 26000},
+    {"퀸엘리자베스", 300000, 30000},
+    {"도쿄", 350000, 35000},
+    {"마드리드", 350000, 35000},
+    {"", 0, 0},   // 빈 칸
     {"도쿄", 300000, 30000},
-    {"마드리드", 280000, 28000},
+    {"컬럼비아", 450000, 45000},
     {"파리", 320000, 32000},
-    {"런던", 350000, 35000},
     {"로마", 320000, 32000},
+    {"", 0, 0},   // 빈 칸
+    {"런던", 350000, 35000},
     {"뉴욕", 350000, 35000},
+    {"", 0, 0},   // 빈 칸
     {"서울", 1000000, 100000},
-    {"", 0, 0},  // 빈 칸
-    {"", 0, 0},  // 빈 칸
-    {"", 0, 0},  // 빈 칸
-    {"", 0, 0},  // 빈 칸
-    {"", 0, 0}   // 빈 칸
 };
 
 typedef struct {
@@ -160,7 +169,11 @@ void broadcastToRoom(GameRoom* room, const char* message, SOCKET excludeSocket) 
 // 주사위 굴리기 처리
 // Modify handle_dice_roll to simply pass turn for special squares
 void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2) {
+    printf("DEBUG: handle_dice_roll called for player %d\n", playerIndex);
+
     if (room->currentTurn != playerIndex) {
+        printf("DEBUG: Not current player's turn (%d tried to roll but it's %d's turn)\n",
+            playerIndex, room->currentTurn);
         return;
     }
 
@@ -170,15 +183,27 @@ void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2) {
 
     // Broadcast dice roll
     sprintf(msg, "DICE:%d,%d", dice1, dice2);
+    printf("DEBUG: Broadcasting dice roll: %s\n", msg);
     broadcastToRoom(room, msg, INVALID_SOCKET);
     Sleep(500);
 
     // Move player
     int oldPos = player->position;
-    player->position = (oldPos + dice1 + dice2) % 32;
+    player->position = (oldPos + dice1 + dice2) % 40;  // Changed to 40 to match board size
+    printf("DEBUG: Player %d moved to position %d\n", playerIndex, player->position);
+
+    // Force broadcast and processing of movement
+    sprintf(msg, "DICE:%d,%d", dice1, dice2);
+    broadcastToRoom(room, msg, INVALID_SOCKET);
+    Sleep(500);  // Give clients time to process dice roll
+
+    sprintf(msg, "MOVE:%d,%d", playerIndex, player->position);
+    broadcastToRoom(room, msg, INVALID_SOCKET);
+    Sleep(500);  // Give clients time to process movement
 
     // Broadcast movement
     sprintf(msg, "MOVE:%d,%d", playerIndex, player->position);
+    printf("DEBUG: Broadcasting movement: %s\n", msg);
     broadcastToRoom(room, msg, INVALID_SOCKET);
     Sleep(500);
 
@@ -207,6 +232,7 @@ void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2) {
 
     // If landed on special square or empty square, just pass turn
     if (Deeds[player->position].price == 0) {
+        printf("DEBUG: Not a purchasable property, changing turn\n");
         handle_turn(room);
         return;
     }
@@ -218,6 +244,7 @@ void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2) {
         Deeds[player->position].price > 0) {
 
         // Include property name and position in CAN_BUY message
+        printf("DEBUG: Sending CAN_BUY message\n");
         char msg[BUFFER_SIZE];
         sprintf(msg, "CAN_BUY:%d,%d,%s",
             player->position,
@@ -225,6 +252,7 @@ void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2) {
             Deeds[player->position].name);
         send(player->socket, msg, strlen(msg), 0);
     } else if (room->properties[player->position] != playerIndex) {
+        printf("DEBUG: Property owned, handling toll and changing turn\n");
         handle_toll(room, player->position);
         handle_turn(room);
     } else {
@@ -232,22 +260,31 @@ void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2) {
     }
 }
 
-// 땅 구매 처리 함수 수정
+// 땅 구매 처리 함수
 void handle_property_purchase(GameRoom* room, int playerNum, int position) {
-    if (position < 0 || position >= 32) return;
+    printf("DEBUG: Processing purchase for player %d at position %d\n", playerNum, position);
+
+    if (position < 0 || position >= MAX_PROPERTIES) {
+        printf("DEBUG: Invalid position %d\n", position);
+        return;
+    }
 
     Player* player = &room->players[playerNum];
     const Deed* property = &Deeds[position];
-    char msg[BUFFER_SIZE];  // 버퍼 선언 추가
+    char msg[BUFFER_SIZE];
 
     // Verify player position matches purchase position
     if (player->position != position) {
+        printf("DEBUG: Position mismatch - player at %d, trying to buy %d\n", player->position, position);
         sprintf(msg, "ERROR:잘못된 위치입니다");
         send(player->socket, msg, strlen(msg), 0);
         return;
     }
 
-    if (room->properties[position] != -1 || player->position != position) return;
+    if (room->properties[position] != -1) {
+        printf("DEBUG: Property already owned\n");
+        return;
+    }
 
     int cost = property->price;
     if (player->money >= cost) {
@@ -255,23 +292,21 @@ void handle_property_purchase(GameRoom* room, int playerNum, int position) {
         room->properties[position] = playerNum;
 
         // Send detailed purchase success message
-        sprintf(msg, "PURCHASE_SUCCESS:%d,%d,%d,%s",
-            position, playerNum, player->money, property->name);
+        sprintf(msg, "PURCHASE_SUCCESS:%d,%d,%d",
+            position, playerNum, player->money);
+        printf("DEBUG: Purchase success - broadcasting message: %s\n", msg);
         broadcastToRoom(room, msg, INVALID_SOCKET);
 
         Sleep(500);  // Give time for UI update
-
-        // Change turn
-        handle_turn(room);
     } else {
         sprintf(msg, "ERROR:돈이 부족합니다");
         send(player->socket, msg, strlen(msg), 0);
-
-        Sleep(500);  // Give time for message display
-
-        // Change turn even if purchase fails
-        handle_turn(room);
     }
+
+    // Always change turn after purchase attempt
+    printf("DEBUG: Changing turn after purchase\n");
+    Sleep(500);  // Give time for purchase message processing
+    handle_turn(room);
 }
 
 // 월급 지급 함수 추가
@@ -286,6 +321,8 @@ void give_salary(GameRoom* room, int playerNum) {
 
 // 턴 처리 함수 수정
 void handle_turn(GameRoom* room) {
+    printf("DEBUG: handle_turn called - current turn is %d\n", room->currentTurn);
+
     Player* current = &room->players[room->currentTurn];
     Player* other = &room->players[1 - room->currentTurn];
 
@@ -297,15 +334,17 @@ void handle_turn(GameRoom* room) {
         broadcastToRoom(room, msg, INVALID_SOCKET);
     }
 
-    room->currentTurn = 1 - room->currentTurn; // Switch between 0 and 1
+    // Switch turn
+    room->currentTurn = 1 - room->currentTurn;
+    printf("DEBUG: Turn changed to player %d\n", room->currentTurn);
 
-    // Add delay before sending turn message
     Sleep(500);
 
     // Send turn message with current player position
     char msg[BUFFER_SIZE];
     sprintf(msg, "TURN:%d,%d", room->currentTurn,
         room->players[room->currentTurn].position);
+    printf("DEBUG: Broadcasting turn message: %s\n", msg);
     broadcastToRoom(room, msg, INVALID_SOCKET);
 }
 
@@ -342,7 +381,7 @@ void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum) {
     bankrupt->isActive = 0;
     bankrupt->money = 0;
 
-    // 모든 소유 부동산을 처리
+    // 모든 소�� 부동산을 처리
     for (int i = 0; i < 32; i++) {
         if (room->properties[i] == playerNum) {
             if (creditorNum == -1) {
@@ -377,6 +416,7 @@ void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum) {
 }
 
 // 클라이언트 처리 스레드
+// Add roomIndex tracking in JOIN handler and fix client_handler function
 DWORD WINAPI client_handler(LPVOID clientSocket) {
     SOCKET sock = *(SOCKET*)clientSocket;
     free(clientSocket);
@@ -390,6 +430,9 @@ DWORD WINAPI client_handler(LPVOID clientSocket) {
             break;
         }
         buffer[bytesReceived] = '\0';
+
+        // Add debug message for received commands
+        printf("Received command from client: %s\n", buffer);
 
         EnterCriticalSection(&roomLock);
 
@@ -428,6 +471,7 @@ DWORD WINAPI client_handler(LPVOID clientSocket) {
             char* roomName = buffer + 5;
             GameRoom* room = find_room(roomName);
             if (room && !room->isGameStarted && room->numPlayers < MAX_PLAYERS) {
+                roomIndex = room - rooms;  // Calculate room index for joining player
                 playerIndex = room->numPlayers;
                 Player* player = &room->players[playerIndex];
                 player->socket = sock;
@@ -459,13 +503,23 @@ DWORD WINAPI client_handler(LPVOID clientSocket) {
         // 게임 진행 중 명령 처리
         else if (roomIndex != -1 && rooms[roomIndex].isGameStarted) {
             GameRoom* room = &rooms[roomIndex];
+            printf("DEBUG: Processing command in room %d for player %d (current turn: %d)\n",
+                roomIndex, playerIndex, room->currentTurn);
 
             if (strncmp(buffer, "ROLL:", 5) == 0) {
+                // Add debug message for dice roll
+                printf("Processing dice roll command for player %d (current turn: %d)\n",
+                    playerIndex, room->currentTurn);
+
                 if (room->currentTurn == playerIndex) {
                     int dice1, dice2;
                     if (sscanf(buffer + 5, "%d,%d", &dice1, &dice2) == 2) {
+                        printf("Dice values: %d, %d - processing roll\n", dice1, dice2);
                         handle_dice_roll(room, playerIndex, dice1, dice2);
                     }
+                } else {
+                    printf("DEBUG: Ignoring dice roll - not player's turn (player: %d, current turn: %d)\n",
+                        playerIndex, room->currentTurn);
                 }
             }
             else if (strncmp(buffer, "BUY:", 4) == 0) {
@@ -517,7 +571,7 @@ int main() {
     serverAddr.sin_port = htons(12345);
 
     if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-        printf("바인드 실패\n");
+        printf("바인딩 실패\n");
         closesocket(serverSocket);
         return 1;
     }
