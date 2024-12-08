@@ -19,13 +19,13 @@
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 12345
 
-// °ÔÀÓ »óÅÂ °ü·Ã »ó¼ö
+// Constants related to game state
 #define STATE_LOBBY 0
 #define STATE_IN_GAME 1
 
-// °ÔÀÓ »ó¼ö Ãß°¡
-#define INDIA_POSITION 15  // ÀÎµµ À§Ä¡
-#define SALARY_AMOUNT 200000  // ¿ù±Þ
+// Add game constants
+#define INDIA_POSITION 15  // india location
+#define SALARY_AMOUNT 200000  // salary
 
 // Define complete Deed structure at the beginning
 typedef struct {
@@ -111,7 +111,7 @@ int myPlayerNum = -1;
 int playerCount = 0;
 int currentTurn = -1;
 int roundCount = 1;     // Track current round
-int gamePhase = 0;  // Ãß°¡: °ÔÀÓ ÁøÇà ´Ü°è
+int gamePhase = 0;  // Game Progression Steps
 int waitingForPurchase = 0;
 int canBuyPosition = -1;
 int lastPurchasePosition = -1;  // Track last purchased position
@@ -146,18 +146,18 @@ void handle_toll(GameRoom* room, int position);
 void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum);
 void handle_build(GameRoom* room, int playerNum, int position);
 
-// ÅØ½ºÆ® »ö»ó º¯°æ ÇÔ¼ö
+// Text color change function
 void textColor(int colorNum) {
     SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), colorNum);
 }
 
-// Ä¿¼­ À§Ä¡ ÀÌµ¿ ÇÔ¼ö
+// Cursor position movement function
 void gotoxy(int x, int y) {
     COORD pos = { x, y };
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), pos);
 }
 
-// ÇÃ·¹ÀÌ¾î ÃÊ±âÈ­ ÇÔ¼ö
+// player initialization function
 void init_players(int player_cnt) {
     int colors[4] = {RED, BLUE, GREEN, YELLOW};
     playerCount = player_cnt;
@@ -173,19 +173,19 @@ void init_players(int player_cnt) {
     }
 }
 
-// ÁÖ»çÀ§ º¸µå ±×¸®±â ÇÔ¼ö
+// Dice board drawing function
 void draw_dice_board(int dice1, int dice2) {
     int x = 35, y = 26;
 
-    // ÁÖ»çÀ§ 1
+    // dice 1
     gotoxy(x, y);
-    printf("¦£??¦¡¦¡¦¡¦¡¦¤");
+    printf("¦£¦¡¦¡¦¡¦¡¦¡¦¤");
     gotoxy(x, y + 1);
     printf("¦¢  %d  ¦¢", dice1);
     gotoxy(x, y + 2);
     printf("¦¦¦¡¦¡¦¡¦¡¦¡¦¥");
 
-    // ÁÖ???À§ 2
+    // dice 2
     gotoxy(x + 15, y);
     printf("¦£¦¡¦¡¦¡¦¡¦¡¦¤");
     gotoxy(x + 15, y + 1);
@@ -193,14 +193,13 @@ void draw_dice_board(int dice1, int dice2) {
     gotoxy(x + 15, y + 2);
     printf("¦¦¦¡¦¡¦¡¦¡¦¡¦¥");
 
-    // ÇÕ°è
+    // sum
     gotoxy(x + 8, y + 4);
     printf("ÇÕ°è: %d", dice1 + dice2);
 }
 
-// °ÔÀÓ ??º¸ Ç¥½Ã ÇÔ¼ö ¼öÁ¤
+// Game information display function
 void show_game_info() {
-    // Remove duplicate game info display
     gotoxy(140, 3);
     printf("³ªÀÇ ¹øÈ£: ÇÃ·¹ÀÌ¾î %d", myPlayerNum + 1);
 
@@ -214,7 +213,7 @@ void show_game_info() {
     for (int i = 0; i < 2; i++) {  // Only show 2 players
         gotoxy(140, 9 + i);
         textColor(Players[i].color);
-        printf("ÇÃ·¹ÀÌ¾î %d: %d¿ø (%d¹ÙÄû)", i + 1, Players[i].money, Players[i].laps);
+        printf("ÇÃ·¹ÀÌ¾î %d: %d¿ø", i + 1, Players[i].money);
         textColor(15);
     }
 
@@ -229,7 +228,7 @@ void show_game_info() {
     printf("N: ±¸¸Å °Ç³Ê¶Ù±â");
 }
 
-// ¸» ±×¸®±â ÇÔ¼ö ¼öÁ¤
+// horse drawing function
 void draw_player_markers() {
     for (int i = 0; i < playerCount; i++) {
         if (Players[i].isActive) {
@@ -262,7 +261,7 @@ void draw_player_markers() {
     }
 }
 
-// ÁÖ»çÀ§ UI ±×¸®±â ÇÔ¼ö Ãß°¡
+// Dice UI drawing function
 void draw_dice(int x, int y, int value) {
     char dice[3][6] = {
         "¦£¦¡¦¤",
@@ -279,7 +278,7 @@ void draw_dice(int x, int y, int value) {
     printf("%d", value);
 }
 
-// ¼¿¿¡ ÅØ½ºÆ® Ãâ·Â ÇÔ¼ö
+// Function to print text in a cell
 void printInCell(int x, int y, const Deed* deed) {
     if (strlen(deed->name) == 0) {
         gotoxy(x, y + 2);
@@ -315,7 +314,7 @@ void printInCell(int x, int y, const Deed* deed) {
     }
 }
 
-// ¸» ±×¸®±â ÇÔ¼ö
+// horse drawing function
 void draw_player_marker(int playerNum, int x, int y) {
     gotoxy(x, y);
     textColor(Players[playerNum].color);
@@ -323,7 +322,7 @@ void draw_player_marker(int playerNum, int x, int y) {
     textColor(15);
 }
 
-// ³×Æ®¿öÅ© ¸Þ½ÃÁö Ã³¸® ÇÔ¼ö
+// Network message processing function
 void handle_network_message(char* message) {
     char command[32];
     char rest[BUFFER_SIZE];
@@ -346,10 +345,10 @@ void handle_network_message(char* message) {
         int dice1, dice2;
         if (sscanf(payload, "%d,%d", &dice1, &dice2) == 2) {
             diceRollInProgress = 1;  // Mark dice roll as in progress
-            system("cls");  // È­¸é ÃÊ±âÈ­
-            draw_board();   // º¸µå ´Ù½Ã ±×¸®±â
-            draw_dice_board(dice1, dice2);  // ÁÖ»çÀ§ Ç¥½Ã
-            show_game_info();  // Á¤º¸ ¾÷µ¥ÀÌÆ®
+            system("cls");
+            draw_board();
+            draw_dice_board(dice1, dice2);
+            show_game_info();
             gotoxy(0, 57);
             printf("ÁÖ»çÀ§ °á°ú: %d + %d = %d", dice1, dice2, dice1 + dice2);
         }
@@ -386,7 +385,7 @@ void handle_network_message(char* message) {
 
         // Display salary message and update game state
         gotoxy(0, 57);
-        printf("Player %d received salary: 200,000 won!", playerNum + 1);
+        printf("ÇÃ·¹ÀÌ¾î %d °¡ ¿ù±Þ 200,000 ¿øÀ» ¹Þ¾Ò½À´Ï´Ù.", playerNum + 1);
         Sleep(1000);
 
         // Clear message and continue game
@@ -462,15 +461,13 @@ void handle_network_message(char* message) {
     else if (strcmp(command, "CREATED") == 0) {
         gotoxy(0, 55);
         printf("¹æÀÌ »ý¼ºµÇ¾ú½À´Ï´Ù. ´Ù¸¥ ÇÃ·¹ÀÌ¾î¸¦ ±â´Ù¸®´Â Áß...\n");
-        // ¹æ »ý¼º ¼º°ø ½Ã Ãß°¡ Ã³¸®
-        gameState = STATE_LOBBY;  // ·Îºñ »óÅÂ
     }
     else if (strcmp(command, "JOIN_FAILED") == 0) {
         gotoxy(0, 55);
-        printf("¹æ ÀÔÀå¿¡ ½ÇÆÐÇß½À´Ï´Ù. ¹æ ???¸§À» È®ÀÎÇØÁÖ¼¼¿ä.\n");
+        printf("¹æ ÀÔÀå¿¡ ½ÇÆÐÇß½À´Ï´Ù. ¹æ ÀÌ¸§À» È®ÀÎÇØÁÖ¼¼¿ä.\n");
         Sleep(2000);
         system("cls");
-        gameState = STATE_LOBBY;  // ·Îºñ »óÅÂ·Î º¹±Í
+        gameState = STATE_LOBBY;  // return to lobby
     }
     else if (strcmp(command, "GAME_START") == 0) {
         gameState = STATE_IN_GAME;
@@ -478,6 +475,7 @@ void handle_network_message(char* message) {
         draw_board();
         show_game_info();
     }
+    // not used
     else if (strcmp(command, "PHASE_CHANGE") == 0) {
         gamePhase = atoi(rest);
         gotoxy(0, 57);
@@ -489,6 +487,7 @@ void handle_network_message(char* message) {
         draw_board();
         show_game_info();
     }
+
     else if (strcmp(command, "ROUND") == 0) {
         roundCount = atoi(payload);
         gotoxy(0, 57);
@@ -565,7 +564,7 @@ void handle_network_message(char* message) {
     LeaveCriticalSection(&printLock);
 }
 
-// ¼ö½Å ½º·¹µå ÇÔ¼ö
+// receiving thread function
 DWORD WINAPI receive_thread(LPVOID arg) {
     char buffer[BUFFER_SIZE];
 
@@ -581,12 +580,12 @@ DWORD WINAPI receive_thread(LPVOID arg) {
     return 0;
 }
 
-// °ÔÀÓÆÇ ±×¸®±â ÇÔ¼ö
+// Game board drawing function
 void draw_board() {
-    system("cls");  // È­¸é ÃÊ±âÈ­
+    system("cls");  // init screen
 
-    // º¸µå ÇÁ·¹ÀÓ ±×¸®±â
-    //?? À­¶óÀÎ
+    // board frame
+    // upper line
     gotoxy(0, 0);
     puts("¦£¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¤");
     for (int i = 0; i < 4; i++) {
@@ -597,7 +596,7 @@ void draw_board() {
     }
     puts("¦§¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦«¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦«¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦©");
 
-    // Áß°£ ¶óÀÎ
+    // stay in the middle
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 4; j++) {
             puts("¦¢          ¦¢                                                                                                  ¦¢          ¦¢");
@@ -609,7 +608,7 @@ void draw_board() {
         puts("¦¢          ¦¢                                                                                                  ¦¢          ¦¢");
     }
 
-    // ¸Ç ¾Æ·§¶óÀÎ
+    // below line
     puts("¦§¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦«¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¨¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦«¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦©");
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 11; j++) {
@@ -619,7 +618,7 @@ void draw_board() {
     }
     puts("¦¦¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦ª¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¥");
 
-    // ºí·ç¸¶ºí Å¸ÀÌÆ² ±×¸®±â
+    // title
     char title_art[12][150] = {
         "  ¡á¡á     ¡á¡á    ¡á¡á¡á¡á¡á¡á¡á¡á            ¡á    ¡á      ¡á  ",
         "  ¡á¡á     ¡á¡á          ¡á¡á    ¡á¡á¡á¡á¡á¡á  ¡á    ¡á¡á¡á¡á¡á¡á¡á¡á  ",
@@ -641,7 +640,7 @@ void draw_board() {
         puts(title_art[i]);
     }
 
-    // ÁÖ»çÀ§ º¸µå ±×¸®±â
+    // dice board but not used
     char dice_board_art[13][180] = {
         "¦£¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¤",
         "¦¢                                                       ¦¢",
@@ -664,7 +663,7 @@ void draw_board() {
         puts(dice_board_art[i]);
     }
 
-    // È²±Ý¿­¼è ±×¸®±â
+    // golden key but NOT USED
     char key_art[7][100] = {
         "¦£¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¤",
         "¦¢  .---.                     ¦¢",
@@ -672,7 +671,7 @@ void draw_board() {
         "¦¢ | ()  | ________   _   _)  ¦¢",
         "¦¢ \\    |/        | | | |     ¦¢",
         "¦¢  `---'         \" - \" |_|   ¦¢",
-        "¦¦¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡??¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¥"
+        "¦¦¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¥"
     };
 
     int key_x = 47, key_y = 40;
@@ -681,7 +680,7 @@ void draw_board() {
         puts(key_art[i]);
     }
 
-    // ¶¥ Á¤º¸ Ç¥½Ã (°¢ Ä­¿¡ µµ½Ã ÀÌ¸§??? °¡°Ý Ãâ·Â)
+    // Display land information (print city name and price in each cell)
     int curr_x = 111, curr_y = 51;
     int deedIndex = 0;
 
@@ -709,7 +708,7 @@ void draw_board() {
         curr_y += 5;
     }
 
-    // °ÔÀÓ Á¤º¸ Ãâ·Â
+    // Game information output
     gotoxy(140, 5);
     printf("¦£¦¡ °ÔÀÓ Á¤º¸ ¦¡¦¤");
     gotoxy(140, 6);
@@ -731,13 +730,13 @@ void draw_board() {
     gotoxy(140, 15);
     printf("T: ÅÏ ³Ñ±â±â");
 
-    // ÇÃ·¹ÀÌ¾î ¸» ±×¸®±â
+    // players char? horse? draw on board
     for (int i = 0; i < playerCount; i++) {
         if (Players[i].isActive) {
             int pos = Players[i].position;
             int x, y;
 
-            // À§Ä¡¿¡ µû¸¥ ÁÂÇ¥ °è»ê
+            // Calculate coordinates based on location
             if (pos <= 10) {
                 x = 111 - (pos * 11);
                 y = 51;
@@ -762,7 +761,8 @@ void draw_board() {
         }
     }
 }
-// °ÔÀÓ ·çÇÁ ÇÔ¼ö ¼öÁ¤
+
+// game loop
 void game_loop() {
     char buffer[BUFFER_SIZE];
 
@@ -821,18 +821,18 @@ void game_loop() {
     }
 }
 
-// game_start ÇÔ¼ö¿¡¼­ ÃÊ±âÈ­ ºÎºÐ ¼öÁ¤
+// game_start function
 void game_start() {
     srand((unsigned int)time(NULL));
 
-    // Winsock ÃÊ±âÈ­
+    // Winsock init
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), & wsaData) != 0) {
         printf("WSAStartup ½ÇÆÐ\n");
         return;
     }
 
-    // ¼ÒÄÏ »ý¼º
+    // create socket
     clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (clientSocket == INVALID_SOCKET) {
         printf("¼ÒÄÏ »ý¼º ½ÇÆÐ\n");
@@ -840,7 +840,7 @@ void game_start() {
         return;
     }
 
-    // ¼­¹ö ¿¬°á
+    // server connect
     struct sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(SERVER_PORT);
@@ -855,25 +855,25 @@ void game_start() {
 
     printf("¼­¹ö¿¡ ¿¬°áµÇ¾ú½À´Ï´Ù!\n");
 
-    // ÃÊ±âÈ­ ¼ø¼­ º¯°æ
+    // Change initialization order
     init_players(2);
 
-    // ¹öÆÛ¸µ ¸ðµå º¯°æ
+    // Change buffering mode
     unsigned long mode = 1;
     ioctlsocket(clientSocket, FIONBIO, & mode);
 
-    // ¼ö½Å ½º·¹µå »ý¼º
+    // Create a receiving thread
     HANDLE hThread = CreateThread(NULL, 0, receive_thread, NULL, 0, NULL);
     if (hThread == NULL) {
         printf("¼ö½Å ½º·¹µå »ý¼º ½ÇÆÐ\n");
         return;
     }
 
-    // ºñµ¿±â ¸ðµå ÇØÁ¦ (µ¿±â ¸ðµå·Î ¼³Á¤)
+    // Turn off asynchronous mode (set to synchronous mode)
     mode = 0;
     ioctlsocket(clientSocket, FIONBIO, & mode);
 
-    // ·Îºñ ¸Þ´º
+    // lobby menu
     while (gameState == STATE_LOBBY) {
         printf("\n=== ºí·ç¸¶ºí °ÔÀÓ ·Îºñ ===\n");
         printf("1. ¹æ ¸¸µé±â\n");
@@ -894,7 +894,7 @@ void game_start() {
             if (send(clientSocket, message, strlen(message), 0) > 0) {
                 printf("\n¹æÀ» »ý¼ºÇÏ°í ´Ù¸¥ ÇÃ·¹ÀÌ¾î¸¦ ±â´Ù¸®´Â Áß...\n");
 
-                // ¼­¹ö ÀÀ´ä ´ë±â
+                // wait for server response
                 int bytes = recv(clientSocket, response, BUFFER_SIZE - 1, 0);
                 if (bytes > 0) {
                     response[bytes] = '\0';
@@ -908,7 +908,7 @@ void game_start() {
             if (send(clientSocket, message, strlen(message), 0) > 0) {
                 printf("\n¹æ ÀÔÀåÀ» ½ÃµµÇÏ´Â Áß...\n");
 
-                // ¼­¹ö ÀÀ´ä ´ë±â
+                // wait for server response
                 int bytes = recv(clientSocket, response, BUFFER_SIZE - 1, 0);
                 if (bytes > 0) {
                     response[bytes] = '\0';
@@ -920,19 +920,19 @@ void game_start() {
         Sleep(100);
     }
 
-    // °ÔÀÓ ½ÃÀÛ ÈÄ ºñµ¿±â ¸ðµå·Î ÀüÈ¯
+    // Switch to asynchronous mode after starting the game
     mode = 1;
     ioctlsocket(clientSocket, FIONBIO, & mode);
 
-    // °ÔÀÓÀÌ ½ÃÀÛµÇ¸é È­¸éÀ» Áö¿ì°í °ÔÀÓ º¸µå Ç¥½Ã
+    // When the game starts, clear the screen and show the game board
     system("cls");
     draw_board();
 
-    // °ÔÀÓ ·çÇÁ ½ÇÇà
+    // game loop launch lets goooooo
     game_loop();
 }
 
-// ¸ÞÀÎ ÇÔ¼ö
+// main
 int main() {
     srand((unsigned) time(NULL));
     InitializeCriticalSection( & printLock);
@@ -941,14 +941,14 @@ int main() {
     return 0;
 }
 
-// ÅëÇà·á Ã³¸® ÇÔ¼ö ¼öÁ¤
+// Toll processing function
 void handle_toll(GameRoom * room, int position) {
     struct player * current = & room -> players[room -> currentTurn];
-    Deed * property = & Deeds[position];  // Changed to use Deed* instead of struct deed*
+    Deed * property = & Deeds[position];
     int owner = property -> ownerNum;
 
     if (owner != -1 && owner != room -> currentTurn) {
-        int rent = property -> baseRent * room -> roundCount;  // Use baseRent instead of toll array
+        int rent = property -> baseRent * room -> roundCount;
         if (current -> money >= rent) {
             current -> money -= rent;
             room -> players[owner].money += rent;
@@ -961,16 +961,16 @@ void handle_toll(GameRoom * room, int position) {
     }
 }
 
-// ÆÄ»ê Ã³¸® ÇÔ¼ö ¼öÁ¤
+// bankruptcy processing function
 void handle_bankruptcy(GameRoom * room, int playerNum, int creditorNum) {
     struct player * bankrupt = & room -> players[playerNum];
     bankrupt -> isActive = 0;
 
-    // ¸ðµç ¼ÒÀ¯ Àç»ê ÀÌÀü
-    for (int i = 0; i < 40; i++) {  // Changed to 40 to match array size
+    // transfer all owned property
+    for (int i = 0; i < 40; i++) {
         if (Deeds[i].ownerNum == playerNum) {
             Deeds[i].ownerNum = creditorNum;
-            Deeds[i].buildingLevel = 0;  // ??¹° ÃÊ±âÈ­
+            Deeds[i].buildingLevel = 0;
         }
     }
 
@@ -979,7 +979,7 @@ void handle_bankruptcy(GameRoom * room, int playerNum, int creditorNum) {
     send(clientSocket, msg, strlen(msg), 0);
 }
 
-// °Ç¹° °Ç¼³ ÇÔ¼ö ¼öÁ¤
+// building construction function but **NOT USED** because simplified bluemarble sorry
 void handle_build(GameRoom * room, int playerNum, int position) {
     if (gamePhase == 0) {
         char msg[BUFFER_SIZE];
@@ -991,7 +991,7 @@ void handle_build(GameRoom * room, int playerNum, int position) {
     struct player * player = & room -> players[playerNum];
     Deed * property = & Deeds[position];
 
-    // Check if the property is buildable (we'll consider any property with price > 0 as buildable)
+    // Check if the property is buildable
     if (property -> ownerNum != playerNum || property -> price <= 0) {
         return;
     }
@@ -1007,7 +1007,7 @@ void handle_build(GameRoom * room, int playerNum, int position) {
     }
 }
 
-// send_network_message ???¼ö Ãß°¡
+// send_network_message function
 void send_network_message(const char * message) {
     send(clientSocket, message, strlen(message), 0);
 }

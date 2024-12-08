@@ -86,12 +86,12 @@ typedef struct {
     int roundCount;      // Add round counter
 } GameRoom;
 
-// 전역 변수
+// Global BTS NEWJEANS Variable
 GameRoom rooms[MAX_ROOMS];
 int numRooms = 0;
 CRITICAL_SECTION roomLock;
 
-// 함수 선언
+// Functions
 void broadcastToRoom(GameRoom* room, const char* message, SOCKET excludeSocket);
 GameRoom* find_room(const char* roomName);
 void start_game(GameRoom* room);
@@ -103,16 +103,16 @@ void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum);
 void handle_toll(GameRoom* room, int position);
 void init_room(GameRoom* room);
 
-// 방 초기화 함수 구현 추가 (함수 선언 아래에 위치)
+// init room function
 void init_room(GameRoom* room) {
-    memset(room, 0, sizeof(GameRoom));  // 전체 구조체를 0으로 초기화
+    memset(room, 0, sizeof(GameRoom));  // Initialize the entire structure to 0
 
-    // 모든 땅의 소유자를 -1로 초기화
+    // Reset all land owners to -1
     for (int i = 0; i < 40; i++) {
         room->properties[i] = -1;
     }
 
-    // 플레이어 초기화
+    // Player reset
     for (int i = 0; i < 2; i++) {
         Player* player = &room->players[i];
         player->isActive = 0;
@@ -128,7 +128,7 @@ void init_room(GameRoom* room) {
     room->roundCount = 1;
 }
 
-// 방 찾기 함수
+// Room Finder Function
 GameRoom* find_room(const char* roomName) {
     for (int i = 0; i < numRooms; i++) {
         if (strcmp(rooms[i].name, roomName) == 0) {
@@ -138,26 +138,26 @@ GameRoom* find_room(const char* roomName) {
     return NULL;
 }
 
-// 게임 시작 함수
+// 재영이가 좋아하는 랜덤 게임 무슨 게임 게임ㅁ 스타트
 void start_game(GameRoom* room) {
     room->isGameStarted = 1;
-    room->currentTurn = 0;  // 첫 번째 플레이어(0)부터 시작
+    room->currentTurn = 0;  // first player start (indexed by player0 , displayed by player 1)
 
     char buffer[BUFFER_SIZE];
-    // 게임 시작 알림
+    // Game start notification
     for (int i = 0; i < room->numPlayers; i++) {
-        sprintf(buffer, "GAME_START:0");  // 모든 플레이어에게 동일한 시작 메시지
+        sprintf(buffer, "GAME_START:0");
         send(room->players[i].socket, buffer, strlen(buffer), 0);
     }
 
-    Sleep(500);  // 잠시 대기
+    Sleep(500);
 
-    // 첫 턴 알림
-    sprintf(buffer, "TURN:0");  // 첫 턴은 항상 0번 플레이어
+    // first turn noti
+    sprintf(buffer, "TURN:0");  // The first turn is always player 0
     broadcastToRoom(room, buffer, INVALID_SOCKET);
 }
 
-// 브로드캐스트 함수
+// broadcast to room
 void broadcastToRoom(GameRoom* room, const char* message, SOCKET excludeSocket) {
     for (int i = 0; i < room->numPlayers; i++) {
         if (room->players[i].isActive && room->players[i].socket != excludeSocket) {
@@ -166,8 +166,7 @@ void broadcastToRoom(GameRoom* room, const char* message, SOCKET excludeSocket) 
     }
 }
 
-// 주사위 굴리기 처리
-// Add new function to check and collect tolls for passed properties
+// check passed properties
 void check_passed_properties(GameRoom* room, int playerIndex, int oldPos, int newPos) {
     Player* player = &room->players[playerIndex];
     int start = oldPos;
@@ -216,7 +215,7 @@ void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2) {
 
     // Move player
     int oldPos = player->position;
-    player->position = (oldPos + dice1 + dice2) % 40;  // Changed to 40 to match board size
+    player->position = (oldPos + dice1 + dice2) % 40;
     printf("DEBUG: Player %d moved to position %d\n", playerIndex, player->position);
 
     // Check tolls for passed properties
@@ -286,10 +285,10 @@ void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2) {
         // Send city index instead of name in CAN_BUY message
         printf("DEBUG: Sending CAN_BUY message\n");
         char msg[BUFFER_SIZE];
-        sprintf(msg, "CAN_BUY:%d,%d,%d",  // Changed format: position,price,cityIndex
+        sprintf(msg, "CAN_BUY:%d,%d,%d",
             player->position,
             Deeds[player->position].price,
-            player->position);  // Send position as city index
+            player->position);
         send(player->socket, msg, strlen(msg), 0);
     } else if (room->properties[player->position] != playerIndex) {
         printf("DEBUG: Property owned, handling toll and changing turn\n");
@@ -300,7 +299,7 @@ void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2) {
     }
 }
 
-// 땅 구매 처리 함수
+// Land purchase processing function
 void handle_property_purchase(GameRoom* room, int playerNum, int position) {
     printf("DEBUG: Processing purchase for player %d at position %d\n", playerNum, position);
 
@@ -349,17 +348,17 @@ void handle_property_purchase(GameRoom* room, int playerNum, int position) {
     handle_turn(room);
 }
 
-// 월급 지급 함수 추가
+// Add salary payment function
 void give_salary(GameRoom* room, int playerNum) {
     Player* player = &room->players[playerNum];
-    player->money += 200000; // 20만원 월급
+    player->money += 200000; // Give salary
 
     char msg[BUFFER_SIZE];
     sprintf(msg, "SALARY:%d,%d", playerNum, player->money);
     broadcastToRoom(room, msg, INVALID_SOCKET);
 }
 
-// 턴 처리 함수 수정
+// turn processing function
 void handle_turn(GameRoom* room) {
     printf("DEBUG: handle_turn called - current turn is %d\n", room->currentTurn);
 
@@ -388,8 +387,7 @@ void handle_turn(GameRoom* room) {
     broadcastToRoom(room, msg, INVALID_SOCKET);
 }
 
-// handle_toll 함수 구현 추가 (파산 처리 함수 앞에 위치)
-// Ensure handle_toll sends proper messages
+// Implement the handle_toll function (placed before the bankruptcy handling function)
 void handle_toll(GameRoom* room, int position) {
     Player* current = &room->players[room->currentTurn];
     int owner = room->properties[position];
@@ -415,33 +413,34 @@ void handle_toll(GameRoom* room, int position) {
     }
 }
 
-// handle_bankruptcy 함수 구현 추가
+// bankruptcy processing function
 void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum) {
     Player* bankrupt = &room->players[playerNum];
 
-    // 플레이어를 파산 상태로 변경
+    // Change player to bankruptcy status
     bankrupt->isActive = 0;
     bankrupt->money = 0;
 
-    // 모든 소유 부동산을 처리
+    // Handle all owned real estate
     for (int i = 0; i < 40; i++) {
         if (room->properties[i] == playerNum) {
             if (creditorNum == -1) {
-                // 은행에 의한 파산: 부동산은 다시 구매 가능한 상태로
+                // Bankruptcy by a bank: property becomes available for purchase again
                 room->properties[i] = -1;
             } else {
-                // 다른 플레이어에 의한 파산: 부동산은 채권자에게 이전
+                // Bankruptcy by another player: real estate transferred to creditors
                 room->properties[i] = creditorNum;
             }
         }
     }
 
-    // 파산 알림 전송
+    // Sending Bankruptcy Notice
     char msg[BUFFER_SIZE];
     sprintf(msg, "BANKRUPTCY:%d,%d", playerNum, creditorNum);
     broadcastToRoom(room, msg, INVALID_SOCKET);
 
-    // 게임 종료 조건 체크 (활성 플레이어가 1명 이하면 게임 종료)
+    // Check game ending conditions (game ends if there is less than 1 active player)
+    // if more playersss.... continue the game but i constructed this game for 2 players
     int activePlayers = 0;
     int winner = -1;
     for (int i = 0; i < room->numPlayers; i++) {
@@ -457,7 +456,7 @@ void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum) {
     }
 }
 
-// 클라이언트 처리 스레드
+// client handler function
 // Add roomIndex tracking in JOIN handler and fix client_handler function
 DWORD WINAPI client_handler(LPVOID clientSocket) {
     SOCKET sock = *(SOCKET*)clientSocket;
@@ -478,7 +477,7 @@ DWORD WINAPI client_handler(LPVOID clientSocket) {
 
         EnterCriticalSection(&roomLock);
 
-        // 방 생성 처리
+        // Room creation processing
         if (strncmp(buffer, "CREATE ", 7) == 0) {
             if (numRooms < MAX_ROOMS) {
                 char* roomName = buffer + 7;
@@ -487,9 +486,9 @@ DWORD WINAPI client_handler(LPVOID clientSocket) {
                     strncpy(rooms[numRooms].name, roomName, sizeof(rooms[numRooms].name) - 1);
                     rooms[numRooms].name[sizeof(rooms[numRooms].name) - 1] = '\0';
 
-                    // 방장 초기화
+                    // Reset the host
                     Player* player = &rooms[numRooms].players[0];
-                    memset(player, 0, sizeof(Player));  // 플레이어 구조체 초기화
+                    memset(player, 0, sizeof(Player));  // Initializing the player structure
                     player->socket = sock;
                     player->isActive = 1;
                     player->money = INITIAL_MONEY;
@@ -508,7 +507,7 @@ DWORD WINAPI client_handler(LPVOID clientSocket) {
                 }
             }
         }
-        // 방 참가 처리
+        // Processing room joins
         else if (strncmp(buffer, "JOIN ", 5) == 0) {
             char* roomName = buffer + 5;
             GameRoom* room = find_room(roomName);
@@ -523,12 +522,12 @@ DWORD WINAPI client_handler(LPVOID clientSocket) {
                 player->playerNum = playerIndex;
                 room->numPlayers++;
 
-                // 참가자에게 플레이어 번호 전송
+                // Send player number to participants
                 char msg[BUFFER_SIZE];
                 sprintf(msg, "PLAYER_NUM:%d", playerIndex);
                 send(sock, msg, strlen(msg), 0);
 
-                // 모든 플레이어에게 참가 알림
+                // Notify all players to join
                 sprintf(msg, "JOIN:플레이어 %d가 참가했습니다. (%d/%d)\n",
                         playerIndex + 1, room->numPlayers, MAX_PLAYERS);
                 broadcastToRoom(room, msg, INVALID_SOCKET);
@@ -538,11 +537,11 @@ DWORD WINAPI client_handler(LPVOID clientSocket) {
                     start_game(room);
                 }
             } else {
-                // 방 입장 실패 메시지 전송
+                // Send room entry failure message
                 send(sock, "JOIN_FAILED:방을 찾을 수 없거나 입장할 수 없습니다.\n", 100, 0);
             }
         }
-        // 게임 진행 중 명령 처리
+        // Command processing while the game is in progress
         else if (roomIndex != -1 && rooms[roomIndex].isGameStarted) {
             GameRoom* room = &rooms[roomIndex];
             printf("DEBUG: Processing command in room %d for player %d (current turn: %d)\n",
@@ -570,14 +569,14 @@ DWORD WINAPI client_handler(LPVOID clientSocket) {
                 handle_property_purchase(room, playerIndex, position);
             }
             else if (strncmp(buffer, "SKIP_PURCHASE", 12) == 0) {
-                handle_turn(room);  // 구매를 건너뛰고 턴 진행
+                handle_turn(room);  // Skip purchase and proceed with turn
             }
         }
 
         LeaveCriticalSection(&roomLock);
     }
 
-    // 연�� 종료 처리
+    // Connection termination processing
     if (roomIndex != -1 && playerIndex != -1) {
         EnterCriticalSection(&roomLock);
         GameRoom* room = &rooms[roomIndex];
@@ -592,6 +591,7 @@ DWORD WINAPI client_handler(LPVOID clientSocket) {
     return 0;
 }
 
+// socket open and server start
 int main() {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
