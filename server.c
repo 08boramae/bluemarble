@@ -53,7 +53,7 @@ const Deed Deeds[40] = {
     {"하와이", 260000, 26000},
     {"리스본", 260000, 26000},
     {"퀸엘리자베스", 300000, 30000},
-    {"도쿄", 350000, 35000},
+    {"대구", 350000, 35000},
     {"마드리드", 350000, 35000},
     {"", 0, 0},   // 빈 칸
     {"도쿄", 300000, 30000},
@@ -82,7 +82,7 @@ typedef struct {
     int numPlayers;
     int currentTurn;
     int isGameStarted;
-    int properties[32];  // Stores owner of each property (-1 for unowned)
+    int properties[40];  // Stores owner of each property (-1 for unowned)
     int roundCount;      // Add round counter
 } GameRoom;
 
@@ -108,7 +108,7 @@ void init_room(GameRoom* room) {
     memset(room, 0, sizeof(GameRoom));  // 전체 구조체를 0으로 초기화
 
     // 모든 땅의 소유자를 -1로 초기화
-    for (int i = 0; i < 32; i++) {
+    for (int i = 0; i < 40; i++) {
         room->properties[i] = -1;
     }
 
@@ -280,16 +280,16 @@ void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2) {
     // Handle property actions after movement
     if (room->properties[player->position] == -1 &&
         player->position > 0 &&
-        player->position < 32 &&
+        player->position < 40 &&
         Deeds[player->position].price > 0) {
 
-        // Include property name and position in CAN_BUY message
+        // Send city index instead of name in CAN_BUY message
         printf("DEBUG: Sending CAN_BUY message\n");
         char msg[BUFFER_SIZE];
-        sprintf(msg, "CAN_BUY:%d,%d,%s",
+        sprintf(msg, "CAN_BUY:%d,%d,%d",  // Changed format: position,price,cityIndex
             player->position,
             Deeds[player->position].price,
-            Deeds[player->position].name);
+            player->position);  // Send position as city index
         send(player->socket, msg, strlen(msg), 0);
     } else if (room->properties[player->position] != playerIndex) {
         printf("DEBUG: Property owned, handling toll and changing turn\n");
@@ -424,7 +424,7 @@ void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum) {
     bankrupt->money = 0;
 
     // 모든 소유 부동산을 처리
-    for (int i = 0; i < 32; i++) {
+    for (int i = 0; i < 40; i++) {
         if (room->properties[i] == playerNum) {
             if (creditorNum == -1) {
                 // 은행에 의한 파산: 부동산은 다시 구매 가능한 상태로
@@ -577,7 +577,7 @@ DWORD WINAPI client_handler(LPVOID clientSocket) {
         LeaveCriticalSection(&roomLock);
     }
 
-    // 연결 종료 처리
+    // 연�� 종료 처리
     if (roomIndex != -1 && playerIndex != -1) {
         EnterCriticalSection(&roomLock);
         GameRoom* room = &rooms[roomIndex];

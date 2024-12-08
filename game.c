@@ -90,7 +90,7 @@ Deed Deeds[40] = {
     {"하와이", 260000, 26000, -1, 0},
     {"리스본", 260000, 26000, -1, 0},
     {"퀸엘리자베스", 300000, 30000, -1, 0},
-    {"도쿄", 350000, 35000, -1, 0},
+    {"대구", 350000, 35000, -1, 0},
     {"마드리드", 350000, 35000, -1, 0},
     {"", 0, 0, -1, 0},   // 빈 칸
     {"도쿄", 300000, 30000, -1, 0},
@@ -121,6 +121,14 @@ int diceRollInProgress = 0;
 char currentPropertyName[50] = {0};
 int currentPlayerPos = -1;  // Track current player's actual position
 int turnChangeInProgress = 0;  // Track turn change state
+
+// Add city names array for local display
+const char* CityNames[40] = {
+    "출발", "타이베이", "", "베이징", "마닐라", "제주도", "싱가포르", "", "카이로", "이스탄불",
+    "인도", "아테네", "", "코펜하겐", "스톡홀름", "베른", "", "베를린", "오타와", "", "부에노스",
+    "", "상파울루", "시드니", "부산", "하와이", "리스본", "퀸엘리자베스", "대구", "마드리드", "",
+    "도쿄", "컬럼비아", "파리", "로마", "", "런던", "뉴욕", "", "서울"
+};
 
 // 함수 선언
 void textColor(int colorNum);
@@ -153,7 +161,7 @@ void gotoxy(int x, int y) {
 void init_players(int player_cnt) {
     int colors[4] = {RED, BLUE, GREEN, YELLOW};
     playerCount = player_cnt;
-    int initialMoney = (player_cnt <= 2) ? 3000000 : 3000000;
+    int initialMoney = (player_cnt <= 2) ? 6000000 : 3000000;
 
     for (int i = 0; i < player_cnt; i++) {
         Players[i].color = colors[i];
@@ -347,9 +355,8 @@ void handle_network_message(char* message) {
         }
     }
     else if (strcmp(command, "CAN_BUY") == 0) {
-        int position, price;
-        char propertyName[50];
-        if (sscanf(payload, "%d,%d,%[^\n]", &position, &price, propertyName) == 3) {
+        int position, price, cityIndex;
+        if (sscanf(payload, "%d,%d,%d", &position, &price, &cityIndex) == 3) {
             if (currentTurn == myPlayerNum) {
                 waitingForPurchase = 1;
                 canBuyPosition = position;
@@ -359,7 +366,8 @@ void handle_network_message(char* message) {
                 gotoxy(0, 57);
                 printf("                                                                              ");
                 gotoxy(0, 57);
-                printf("%s 땅을 구매하시겠습니까? (Y/N) - 가격: %d원", propertyName, price);
+                printf("%s 땅을 구매하시겠습니까? (Y/N) - 가격: %d원",
+                    CityNames[cityIndex], price);  // Use local city name array
             }
         }
     }
@@ -373,11 +381,30 @@ void handle_network_message(char* message) {
     }
     else if (strcmp(command, "SALARY") == 0) {
         int playerNum, money;
-        sscanf(rest, "%d,%d", &playerNum, &money);
+        sscanf(payload, "%d,%d", &playerNum, &money);
         Players[playerNum].money = money;
+
+        // Display salary message and update game state
         gotoxy(0, 57);
-        printf("월급 200,000원이 지급되었습니다!");
+        printf("Player %d received salary: 200,000 won!", playerNum + 1);
         Sleep(1000);
+
+        // Clear message and continue game
+        gotoxy(0, 57);
+        printf("                                                           ");
+
+        // Only update turn message if it's the current player's turn
+        if (currentTurn == myPlayerNum) {
+            gotoxy(0, 57);
+            printf("Your turn. Press SPACE to roll the dice.");
+        } else {
+            gotoxy(0, 57);
+            printf("Player %d's turn.", currentTurn + 1);
+        }
+
+        // Reset dice roll state to allow next turn
+        lastDiceRoll = 0;
+        diceRollInProgress = 0;
     }
     else if (strcmp(command, "MOVE") == 0) {
         int playerNum, newPos;
@@ -436,7 +463,7 @@ void handle_network_message(char* message) {
         gotoxy(0, 55);
         printf("방이 생성되었습니다. 다른 플레이어를 기다리는 중...\n");
         // 방 생성 성공 시 추가 처리
-        gameState = STATE_LOBBY;  // 로비 상태 ??????
+        gameState = STATE_LOBBY;  // 로비 상태
     }
     else if (strcmp(command, "JOIN_FAILED") == 0) {
         gotoxy(0, 55);
@@ -598,11 +625,11 @@ void draw_board() {
         "  ■■     ■■          ■■    ■■■■■■  ■    ■■■■■■■■  ",
         "  ■■■■■■■■■    ■■■■■■■■    ■    ■  ■    ■      ■  ",
         "  ■■     ■■    ■■          ■    ■  ■    ■■■■■■■■  ",
-        "  ■■■■■■■■■    ■■          ■    ■  ■■■■            ",
+        "  ■■■■■■■■■    ■■          ■    ■  ■               ",
         "               ■■■■■■■■■   ■    ■  ■■■■■■■■■■■■■■■",
         "                           ■    ■  ■       ■■      ",
-        "■■■■■■■■■■■ ■■■■■■■■■■■■■■■  ■    ■  ■    ■■■■■■■■  ",
-        "      ■■          ■■       ■■■■■■  ■           ■  ",
+        "■■■■■■■■■■■ ■■■■■■■■■■■■■■ ■■■■■■ ■  ■    ■■■■■■■■  ",
+        "      ■■          ■■               ■           ■  ",
         "      ■■          ■■               ■    ■■■■■■■■  ",
         "      ■■          ■■               ■    ■          ",
         "      ■■          ■■               ■    ■■■■■■■■■ "
@@ -645,7 +672,7 @@ void draw_board() {
         "│ | ()  | ________   _   _)  │",
         "│ \\    |/        | | | |     │",
         "│  `---'         \" - \" |_|   │",
-        "└────────────────────────────┘"
+        "└─────────────────??──────────┘"
     };
 
     int key_x = 47, key_y = 40;
@@ -754,7 +781,7 @@ void game_loop() {
                     sprintf(buffer, "ROLL:%d,%d", dice1, dice2);
                     send_network_message(buffer);
                 }
-                // ...existing code...
+
                 if (waitingForPurchase) {
                     switch(input) {
                         case 'y':
@@ -800,7 +827,7 @@ void game_start() {
 
     // Winsock 초기화
     WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+    if (WSAStartup(MAKEWORD(2, 2), & wsaData) != 0) {
         printf("WSAStartup 실패\n");
         return;
     }
@@ -819,7 +846,7 @@ void game_start() {
     serverAddr.sin_port = htons(SERVER_PORT);
     serverAddr.sin_addr.s_addr = inet_addr(SERVER_IP);
 
-    if (connect(clientSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+    if (connect(clientSocket, (struct sockaddr * ) & serverAddr, sizeof(serverAddr)) < 0) {
         printf("서버 연결 실패\n");
         closesocket(clientSocket);
         WSACleanup();
@@ -833,7 +860,7 @@ void game_start() {
 
     // 버퍼링 모드 변경
     unsigned long mode = 1;
-    ioctlsocket(clientSocket, FIONBIO, &mode);
+    ioctlsocket(clientSocket, FIONBIO, & mode);
 
     // 수신 스레드 생성
     HANDLE hThread = CreateThread(NULL, 0, receive_thread, NULL, 0, NULL);
@@ -844,14 +871,14 @@ void game_start() {
 
     // 비동기 모드 해제 (동기 모드로 설정)
     mode = 0;
-    ioctlsocket(clientSocket, FIONBIO, &mode);
+    ioctlsocket(clientSocket, FIONBIO, & mode);
 
     // 로비 메뉴
     while (gameState == STATE_LOBBY) {
         printf("\n=== 블루마블 게임 로비 ===\n");
         printf("1. 방 만들기\n");
         printf("2. 방 입장하기\n");
-        printf("???택: ");
+        printf("선택: ");
 
         char choice = _getch();
         char roomName[50];
@@ -861,7 +888,7 @@ void game_start() {
         system("cls");
 
         if (choice == '1') {
-            printf("\n방 이름을 입력하세??: ");
+            printf("\n방 이름을 입력하세요: ");
             scanf("%s", roomName);
             sprintf(message, "CREATE %s", roomName);
             if (send(clientSocket, message, strlen(message), 0) > 0) {
@@ -874,8 +901,7 @@ void game_start() {
                     handle_network_message(response);
                 }
             }
-        }
-        else if ( choice == '2') {
+        } else if (choice == '2') {
             printf("\n방 이름을 입력하세요: ");
             scanf("%s", roomName);
             sprintf(message, "JOIN %s", roomName);
@@ -896,7 +922,7 @@ void game_start() {
 
     // 게임 시작 후 비동기 모드로 전환
     mode = 1;
-    ioctlsocket(clientSocket, FIONBIO, &mode);
+    ioctlsocket(clientSocket, FIONBIO, & mode);
 
     // 게임이 시작되면 화면을 지우고 게임 보드 표시
     system("cls");
@@ -908,37 +934,37 @@ void game_start() {
 
 // 메인 함수
 int main() {
-    srand((unsigned)time(NULL));
-    InitializeCriticalSection(&printLock);
+    srand((unsigned) time(NULL));
+    InitializeCriticalSection( & printLock);
     game_start();
-    DeleteCriticalSection(&printLock);
+    DeleteCriticalSection( & printLock);
     return 0;
 }
 
 // 통행료 처리 함수 수정
-void handle_toll(GameRoom* room, int position) {
-    struct player* current = &room->players[room->currentTurn];
-    Deed* property = &Deeds[position];  // Changed to use Deed* instead of struct deed*
-    int owner = property->ownerNum;
+void handle_toll(GameRoom * room, int position) {
+    struct player * current = & room -> players[room -> currentTurn];
+    Deed * property = & Deeds[position];  // Changed to use Deed* instead of struct deed*
+    int owner = property -> ownerNum;
 
-    if (owner != -1 && owner != room->currentTurn) {
-        int rent = property->baseRent * room->roundCount;  // Use baseRent instead of toll array
-        if (current->money >= rent) {
-            current->money -= rent;
-            room->players[owner].money += rent;
+    if (owner != -1 && owner != room -> currentTurn) {
+        int rent = property -> baseRent * room -> roundCount;  // Use baseRent instead of toll array
+        if (current -> money >= rent) {
+            current -> money -= rent;
+            room -> players[owner].money += rent;
             char msg[BUFFER_SIZE];
-            sprintf(msg, "TOLL:%d,%d,%d", room->currentTurn, owner, rent);
+            sprintf(msg, "TOLL:%d,%d,%d", room -> currentTurn, owner, rent);
             send(clientSocket, msg, strlen(msg), 0);
         } else {
-            handle_bankruptcy(room, room->currentTurn, owner);
+            handle_bankruptcy(room, room -> currentTurn, owner);
         }
     }
 }
 
 // 파산 처리 함수 수정
-void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum) {
-    struct player* bankrupt = &room->players[playerNum];
-    bankrupt->isActive = 0;
+void handle_bankruptcy(GameRoom * room, int playerNum, int creditorNum) {
+    struct player * bankrupt = & room -> players[playerNum];
+    bankrupt -> isActive = 0;
 
     // 모든 소유 재산 이전
     for (int i = 0; i < 40; i++) {  // Changed to 40 to match array size
@@ -954,7 +980,7 @@ void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum) {
 }
 
 // 건물 건설 함수 수정
-void handle_build(GameRoom* room, int playerNum, int position) {
+void handle_build(GameRoom * room, int playerNum, int position) {
     if (gamePhase == 0) {
         char msg[BUFFER_SIZE];
         sprintf(msg, "ERROR:전반전에는 건물을 지을 수 없습니다.");
@@ -962,26 +988,26 @@ void handle_build(GameRoom* room, int playerNum, int position) {
         return;
     }
 
-    struct player* player = &room->players[playerNum];
-    Deed* property = &Deeds[position];
+    struct player * player = & room -> players[playerNum];
+    Deed * property = & Deeds[position];
 
     // Check if the property is buildable (we'll consider any property with price > 0 as buildable)
-    if (property->ownerNum != playerNum || property->price <= 0) {
+    if (property -> ownerNum != playerNum || property -> price <= 0) {
         return;
     }
 
-    int buildCost = property->price;
-    if (player->money >= buildCost) {
-        player->money -= buildCost;
-        property->buildingLevel++;
+    int buildCost = property -> price;
+    if (player -> money >= buildCost) {
+        player -> money -= buildCost;
+        property -> buildingLevel++;
 
         char msg[BUFFER_SIZE];
-        sprintf(msg, "BUILD_SUCCESS:%d,%d,%d", position, property->buildingLevel, player->money);
+        sprintf(msg, "BUILD_SUCCESS:%d,%d,%d", position, property -> buildingLevel, player -> money);
         send(clientSocket, msg, strlen(msg), 0);
     }
 }
 
 // send_network_message ???수 추가
-void send_network_message(const char* message) {
+void send_network_message(const char * message) {
     send(clientSocket, message, strlen(message), 0);
 }
