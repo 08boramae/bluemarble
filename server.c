@@ -167,7 +167,34 @@ void broadcastToRoom(GameRoom* room, const char* message, SOCKET excludeSocket) 
 }
 
 // 주사위 굴리기 처리
-// Modify handle_dice_roll to simply pass turn for special squares
+// Add new function to check and collect tolls for passed properties
+void check_passed_properties(GameRoom* room, int playerIndex, int oldPos, int newPos) {
+    Player* player = &room->players[playerIndex];
+    int start = oldPos;
+    int end = newPos;
+
+    // If passed through starting point, handle wrap-around
+    if (newPos < oldPos) {
+        // Check properties from oldPos to 39
+        for (int i = start + 1; i < 40; i++) {
+            if (room->properties[i] != -1 && room->properties[i] != playerIndex) {
+                handle_toll(room, i);
+            }
+        }
+        // Then check from 0 to newPos
+        start = 0;
+        end = newPos;
+    }
+
+    // Check all properties between start and end
+    for (int i = start + 1; i < end; i++) {
+        if (room->properties[i] != -1 && room->properties[i] != playerIndex) {
+            handle_toll(room, i);
+        }
+    }
+}
+
+// Modify handle_dice_roll to include toll check for passed properties
 void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2) {
     printf("DEBUG: handle_dice_roll called for player %d\n", playerIndex);
 
@@ -191,6 +218,9 @@ void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2) {
     int oldPos = player->position;
     player->position = (oldPos + dice1 + dice2) % 40;  // Changed to 40 to match board size
     printf("DEBUG: Player %d moved to position %d\n", playerIndex, player->position);
+
+    // Check tolls for passed properties
+    check_passed_properties(room, playerIndex, oldPos, player->position);
 
     // Force broadcast and processing of movement
     sprintf(msg, "DICE:%d,%d", dice1, dice2);
@@ -235,6 +265,16 @@ void handle_dice_roll(GameRoom* room, int playerIndex, int dice1, int dice2) {
         printf("DEBUG: Not a purchasable property, changing turn\n");
         handle_turn(room);
         return;
+    }
+
+    // After movement, check if landed on another player's property
+    int position = player->position;
+    int propertyOwner = room->properties[position];
+
+    if (propertyOwner != -1 && propertyOwner != playerIndex) {
+        // Calculate and collect toll
+        int rent = Deeds[position].baseRent * room->roundCount;
+        handle_toll(room, position);
     }
 
     // Handle property actions after movement
@@ -349,16 +389,18 @@ void handle_turn(GameRoom* room) {
 }
 
 // handle_toll 함수 구현 추가 (파산 처리 함수 앞에 위치)
+// Ensure handle_toll sends proper messages
 void handle_toll(GameRoom* room, int position) {
     Player* current = &room->players[room->currentTurn];
     int owner = room->properties[position];
 
     if (owner != -1 && owner != room->currentTurn) {
-        // 통행료 계산
         const Deed* property = &Deeds[position];
-        int rent = property->baseRent * room->roundCount; // Rent increases each round
+        int rent = property->baseRent * room->roundCount;
 
-        // 통행료 지불 처리
+        printf("DEBUG: Handling toll payment - Player %d to Player %d, Amount: %d\n",
+            room->currentTurn, owner, rent);
+
         if (current->money >= rent) {
             current->money -= rent;
             room->players[owner].money += rent;
@@ -366,8 +408,8 @@ void handle_toll(GameRoom* room, int position) {
             char msg[BUFFER_SIZE];
             sprintf(msg, "TOLL:%d,%d,%d", room->currentTurn, owner, rent);
             broadcastToRoom(room, msg, INVALID_SOCKET);
+            Sleep(1000);  // Give time for toll message display
         } else {
-            // 통행료를 지불할 수 없는 경우 파산 처리
             handle_bankruptcy(room, room->currentTurn, owner);
         }
     }
@@ -381,7 +423,7 @@ void handle_bankruptcy(GameRoom* room, int playerNum, int creditorNum) {
     bankrupt->isActive = 0;
     bankrupt->money = 0;
 
-    // 모든 소�� 부동산을 처리
+    // 모든 소유 부동산을 처리
     for (int i = 0; i < 32; i++) {
         if (room->properties[i] == playerNum) {
             if (creditorNum == -1) {

@@ -153,7 +153,7 @@ void gotoxy(int x, int y) {
 void init_players(int player_cnt) {
     int colors[4] = {RED, BLUE, GREEN, YELLOW};
     playerCount = player_cnt;
-    int initialMoney = (player_cnt <= 2) ? 6000000 : 3000000;
+    int initialMoney = (player_cnt <= 2) ? 3000000 : 3000000;
 
     for (int i = 0; i < player_cnt; i++) {
         Players[i].color = colors[i];
@@ -279,14 +279,26 @@ void printInCell(int x, int y, const Deed* deed) {
         return;
     }
 
+    // Print property name
     gotoxy(x, y);
     printf("%s", deed->name);
 
     if (deed->price > 0) {
         gotoxy(x, y + 3);
-        printf("%d원", deed->price);
+
+        if (deed->ownerNum >= 0) {
+            // Show rent with owner's color
+            textColor(Players[deed->ownerNum].color);
+            printf("%d", deed->baseRent * roundCount);
+        } else {
+            // Show property price in white
+            textColor(15);  // White color
+            printf("%d", deed->price);
+        }
+        textColor(15);  // Reset color
     }
 
+    // Show ownership marker
     if (deed->ownerNum >= 0) {
         gotoxy(x + 8, y + 3);
         textColor(Players[deed->ownerNum].color);
@@ -501,6 +513,28 @@ void handle_network_message(char* message) {
         draw_player_markers();
         show_game_info();
     }
+    else if (strcmp(command, "TOLL") == 0) {
+        int fromPlayer, toPlayer, amount;
+        if (sscanf(payload, "%d,%d,%d", &fromPlayer, &toPlayer, &amount) == 3) {
+            Players[fromPlayer].money -= amount;
+            Players[toPlayer].money += amount;
+
+            gotoxy(0, 57);
+            printf("                                                                              ");
+            gotoxy(0, 57);
+            if (fromPlayer == myPlayerNum) {
+                printf("플레이어 %d에게 통행료 %d원을 지불했습니다.", toPlayer + 1, amount);
+            } else if (toPlayer == myPlayerNum) {
+                printf("플레이어 %d에게서 통행료 %d원을 받았습니다.", fromPlayer + 1, amount);
+            }
+            Sleep(1500);
+
+            system("cls");
+            draw_board();
+            draw_player_markers();
+            show_game_info();
+        }
+    }
     LeaveCriticalSection(&printLock);
 }
 
@@ -567,7 +601,7 @@ void draw_board() {
         "  ■■■■■■■■■    ■■          ■    ■  ■■■■            ",
         "               ■■■■■■■■■   ■    ■  ■■■■■■■■■■■■■■■",
         "                           ■    ■  ■       ■■      ",
-        "■■■■■■■■■■■ ■■■■■■■■■■■■■  ■    ■  ■    ■■■■■■■■  ",
+        "■■■■■■■■■■■ ■■■■■■■■■■■■■■■  ■    ■  ■    ■■■■■■■■  ",
         "      ■■          ■■       ■■■■■■  ■           ■  ",
         "      ■■          ■■               ■    ■■■■■■■■  ",
         "      ■■          ■■               ■    ■          ",
@@ -841,7 +875,7 @@ void game_start() {
                 }
             }
         }
-        else if (choice == '2') {
+        else if ( choice == '2') {
             printf("\n방 이름을 입력하세요: ");
             scanf("%s", roomName);
             sprintf(message, "JOIN %s", roomName);
@@ -947,7 +981,7 @@ void handle_build(GameRoom* room, int playerNum, int position) {
     }
 }
 
-// send_network_message 함수 추가
+// send_network_message ???수 추가
 void send_network_message(const char* message) {
     send(clientSocket, message, strlen(message), 0);
 }
